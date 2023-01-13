@@ -28,8 +28,7 @@ defmodule Raft.CLI do
     { opts, _, _ } = OptionParser.parse(args, options)
 
     if opts[:help] do
-      { _, cwd } = File.cwd()
-      name = Path.basename(cwd)
+      name = Path.basename(:escript.script_name)
       help(name)
       exit(:shutdown)
     end
