@@ -1,9 +1,10 @@
-FROM elixir:1.14 as build
+FROM elixir:1.14-alpine as build
 
 WORKDIR /app
 COPY ./mix.* ./
 
-RUN mix local.hex --force &&\
+RUN apk add make &&\
+    mix local.hex --force &&\
     mix local.rebar --force &&\
     mix deps.get
 
@@ -12,12 +13,11 @@ COPY . .
 RUN make build &&\
     make clean
 
-FROM elixir:1.14
+FROM erlang:25.2-alpine
 
 WORKDIR /app
-RUN apt update &&\
+RUN apk add tini
     # Agregar handler para sigterm a server
-    apt install -y tini
 
 COPY --from=build /app/distribuidos /app/distribuidos
 
