@@ -1,15 +1,14 @@
 defmodule Raft.Server do
   import Record
+
   require Logger
+  require Raft.State
 
-  defrecord :metadata, id: :nil
+  @type metadata :: record(:metadata, id: integer)
+  defrecord :metadata, id: 0
 
-  def id(m) do
-    metadata(m, :id)
-  end
-
-  def follower(metadata) do
-    Logger.info("Starting follower with id \##{id(metadata)}")
+  def follower() do
+    Logger.info("Starting follower")
     {:follower}
   end
 
@@ -23,23 +22,25 @@ defmodule Raft.Server do
     {:leader}
   end
 
-  def fack() do
-    {:fack}
+  def noop() do
+    {:noop}
   end
 
-  def init(id, state) do
-    metadata = metadata(id: id)
-    run(state, metadata)
+  def init(state) do
+    metadata = metadata(id: :rand.uniform(100000))
+    Logger.info("Starting server with id \##{metadata(metadata, :id)}")
+    run(state)
   end
 
-  def run(state, metadata) do
-    case Raft.State.membership(state) do
+  def run(state) do
+    case Raft.State.state(state, :membership_state) do
       :follower ->
-        follower(metadata)
-        run(state, metadata)
+        follower()
+        Process.sleep(5000)
+        run(state)
       :candidate -> candidate()
       :leader -> leader()
-      _ -> fack()
+      _ -> noop()
     end
   end
 end
