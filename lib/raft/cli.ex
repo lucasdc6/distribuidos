@@ -1,6 +1,4 @@
 defmodule Raft.CLI do
-  require Raft.State
-
   def help(name) do
     IO.puts """
     Usage: #{name} [OPTIONS]
@@ -36,7 +34,7 @@ defmodule Raft.CLI do
       exit(:shutdown)
     end
 
-    state = Raft.State.state()
+    state = %Raft.State{}
     Raft.Server.init(state)
   end
 end
