@@ -3,6 +3,7 @@ package Raft.Server;
 
 service GRPC {
   rpc RequestVote (RequestVoteParams) returns (RequestVoteReply);
+  rpc SetMembership (SetMembershipParams) returns (SetMembershipReply);
 }
 
 message RequestVoteParams {
@@ -12,4 +13,12 @@ message RequestVoteParams {
 message RequestVoteReply {
   int64 server_id = 1;
   bool vote       = 2;
+}
+
+message SetMembershipParams {
+  string membership_state = 1;
+}
+
+message SetMembershipReply {
+  bool result = 1;
 }

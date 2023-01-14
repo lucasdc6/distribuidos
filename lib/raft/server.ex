@@ -9,45 +9,67 @@ defmodule Raft.Server do
   @type metadata :: record(:metadata, id: integer)
   defrecord :metadata, id: 0
 
-  @spec run(Raft.State) :: {:candidate} | {:follower} | {:leader} | {:noop}
+  @spec run(Raft.State) :: {:candidate} | {:follower} | {:leader} | {:shutdown}
   @doc """
   Run the main Raft process
   """
-  def run(state = %Raft.State{membership_state: :follower}) do
-    Logger.info("Starting #{state.membership_state}")
-    Process.sleep(5000)
-    run(state)
-    {:follower}
+  def run(membership_state =  :follower) do
+    timeout = Enum.random(4500..5500)
+    Logger.notice("Node in #{membership_state} mode")
+    Process.sleep(timeout)
+
+    state = Raft.Config.get("state")
+    Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
+    if state.membership_state == membership_state do
+      Raft.Config.put("state", %Raft.State{membership_state: state.membership_state, current_term: state.current_term + 1})
+    end
+
+    run(state.membership_state)
   end
 
-  def run(state = %Raft.State{membership_state: :candidate}) do
-    Logger.info("Starting #{state.membership_state}")
-    Process.sleep(5000)
-    run(state)
-    {:candidate}
+  def run(membership_state = :candidate) do
+    timeout = Enum.random(4500..5500)
+    Logger.notice("Node in #{membership_state} mode")
+    Process.sleep(timeout)
+
+    state = Raft.Config.get("state")
+    Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
+    if state.membership_state == membership_state do
+      Raft.Config.put("state", %Raft.State{membership_state: state.membership_state, current_term: state.current_term + 1})
+    end
+
+    run(state.membership_state)
   end
 
-  def run(state = %Raft.State{membership_state: :leader}) do
-    Logger.info("Starting #{state.membership_state}")
-    Process.sleep(5000)
-    run(state)
-    {:leader}
+  def run(membership_state = :leader) do
+    timeout = Enum.random(4500..5500)
+    Logger.notice("Node in #{membership_state} mode")
+    Process.sleep(timeout)
+
+    state = Raft.Config.get("state")
+    Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
+    if state.membership_state == membership_state do
+      Raft.Config.put("state", %Raft.State{membership_state: state.membership_state, current_term: state.current_term + 1})
+    end
+
+    run(state.membership_state)
   end
 
   def run(_) do
-    {:noop}
+    {:shutdown}
   end
 
-  @spec init(Raft.State) :: {:candidate} | {:follower} | {:leader} | {:noop}
   @doc """
   Initialize the server
 
   """
-  def init(state) do
+  def init(state, arguments) do
     # initialize metadata
     metadata = metadata(id: :rand.uniform(100000))
+    peers = Keyword.get_values(arguments, :peer)
 
-    Logger.info("Starting server with id \##{metadata(metadata, :id)}")
+    Logger.notice("Starting server with id \##{metadata(metadata, :id)}")
+    Logger.debug("Peers: #{inspect(peers)}")
 
     # Configure Config and GRCP processes
     children = [
@@ -58,7 +80,7 @@ defmodule Raft.Server do
       {
         GRPC.Server.Supervisor,
         endpoint: Raft.GRPC.Endpoint,
-        port: 50051,
+        port: arguments[:port] || 50051,
         start_server: true,
       }
     ]
@@ -69,8 +91,10 @@ defmodule Raft.Server do
     Supervisor.start_link(children, opts)
 
     # Update raft central state
-    Raft.Config.put(Raft.Config, "metadata", metadata)
-    Raft.Config.put(Raft.Config, "state", state)
-    run(state)
+    Raft.Config.put("metadata", metadata)
+    Raft.Config.put("state", state)
+    run(state.membership_state)
+    Logger.notice("Shutting down server with id \##{metadata(metadata, :id)}")
+    {:ok}
   end
 end
