@@ -3,7 +3,7 @@ FROM elixir:1.14-alpine as build
 WORKDIR /app
 COPY ./mix.* ./
 
-RUN apk add make &&\
+RUN apk add make git &&\
     mix local.hex --force &&\
     mix local.rebar --force &&\
     mix deps.get
