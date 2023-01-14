@@ -1,10 +1,18 @@
 defmodule Raft.Server do
+  @moduledoc """
+  Raft server
+  This module define the entrypoint for all the processes
+  """
   import Record
   require Logger
 
   @type metadata :: record(:metadata, id: integer)
   defrecord :metadata, id: 0
 
+  @spec run(Raft.State) :: {:candidate} | {:follower} | {:leader} | {:noop}
+  @doc """
+  Run the main Raft process
+  """
   def run(state = %Raft.State{membership_state: :follower}) do
     Logger.info("Starting #{state.membership_state}")
     Process.sleep(5000)
@@ -30,6 +38,11 @@ defmodule Raft.Server do
     {:noop}
   end
 
+  @spec init(Raft.State) :: {:candidate} | {:follower} | {:leader} | {:noop}
+  @doc """
+  Initialize the server
+
+  """
   def init(state) do
     # initialize metadata
     metadata = metadata(id: :rand.uniform(100000))

@@ -1,9 +1,13 @@
 defmodule Raft.Client do
+  @moduledoc """
+  Module to communicate with the Raft server
+  """
   defp connect() do
     {:ok, channel} = GRPC.Stub.connect("localhost:50051")
     channel
   end
 
+  @spec vote(integer) :: {:ok, any}
   def vote(current_term) do
     channel = connect()
 
@@ -11,6 +15,7 @@ defmodule Raft.Client do
     {:ok, _reply} = channel |> Raft.Server.GRPC.Stub.request_vote(request)
   end
 
+  @spec vote :: {:ok, any}
   def vote() do
     channel = connect()
 

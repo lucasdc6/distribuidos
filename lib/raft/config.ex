@@ -1,7 +1,11 @@
 defmodule Raft.Config do
+  @moduledoc """
+  Centralized state for a raft server
+  """
   use Agent
   require Logger
 
+  @spec start_link(any) :: {:error, any} | {:ok, pid}
   @doc """
   Starts a new bucket.
   """
@@ -10,6 +14,7 @@ defmodule Raft.Config do
     Agent.start_link(fn -> %{} end, name: __MODULE__)
   end
 
+  @spec get(atom | pid | {atom, any} | {:via, atom, any}, any) :: any
   @doc """
   Gets a value from the `bucket` by `key`.
   """
@@ -17,6 +22,7 @@ defmodule Raft.Config do
     Agent.get(bucket, &Map.get(&1, key))
   end
 
+  @spec put(atom | pid | {atom, any} | {:via, atom, any}, any, any) :: :ok
   @doc """
   Puts the `value` for the given `key` in the `bucket`.
   """

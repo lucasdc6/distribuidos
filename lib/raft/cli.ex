@@ -1,4 +1,5 @@
 defmodule Raft.CLI do
+  @spec help(String.t()) :: :ok
   def help(name) do
     IO.puts """
     Usage: #{name} [OPTIONS]
@@ -11,6 +12,7 @@ defmodule Raft.CLI do
     """
   end
 
+  @spec main(any) :: none
   def main(args) do
     options = [
       strict: [
@@ -37,4 +39,3 @@ defmodule Raft.CLI do
     Raft.Server.init(state)
   end
 end
-

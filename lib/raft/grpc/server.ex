@@ -2,6 +2,7 @@ defmodule Raft.GRPC.Server do
   use GRPC.Server, service: Raft.Server.GRPC.Service
   require Raft.Server
 
+  @spec child_spec(any) :: any
   def child_spec(arg) do
     IO.inspect(arg)
   end
@@ -17,4 +18,3 @@ defmodule Raft.GRPC.Server do
     )
   end
 end
-
