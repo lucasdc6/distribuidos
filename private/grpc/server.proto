@@ -1,0 +1,15 @@
+syntax = "proto3";
+package Raft.Server;
+
+service GRPC {
+  rpc RequestVote (RequestVoteParams) returns (RequestVoteReply);
+}
+
+message RequestVoteParams {
+  int64 current_term = 1;
+}
+
+message RequestVoteReply {
+  int64 server_id = 1;
+  bool vote       = 2;
+}

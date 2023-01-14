@@ -31,8 +31,33 @@ defmodule Raft.Server do
   end
 
   def init(state) do
+    # initialize metadata
     metadata = metadata(id: :rand.uniform(100000))
+
     Logger.info("Starting server with id \##{metadata(metadata, :id)}")
+
+    # Configure Config and GRCP processes
+    children = [
+      {
+        Raft.Config,
+        id: Raft.Config
+      },
+      {
+        GRPC.Server.Supervisor,
+        endpoint: Raft.GRPC.Endpoint,
+        port: 50051,
+        start_server: true,
+      }
+    ]
+
+    # Configure supervisor strategy and name
+    opts = [strategy: :one_for_one, name: Raft]
+    # Start process
+    Supervisor.start_link(children, opts)
+
+    # Update raft central state
+    Raft.Config.put(Raft.Config, "metadata", metadata)
+    Raft.Config.put(Raft.Config, "state", state)
     run(state)
   end
 end

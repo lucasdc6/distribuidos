@@ -22,7 +22,7 @@ defmodule Distribuidos.MixProject do
   # Run "mix help deps" to learn about dependencies.
   defp deps do
     [
-      {:grpc, "~> 0.5.0"},
+      {:grpc, git:  "https://github.com/elixir-grpc/grpc"},
       {:protobuf, "~> 0.11"}
     ]
   end
