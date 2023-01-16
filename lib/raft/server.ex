@@ -33,10 +33,40 @@ defmodule Raft.Server do
     Process.sleep(timeout)
 
     state = Raft.Config.get("state")
-    Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
-    if state.membership_state == membership_state do
-      Raft.Config.put("state", %Raft.State{membership_state: state.membership_state, current_term: state.current_term + 1})
+    peers = Raft.Config.get("peers")
+    try do
+      for peer <- peers do
+        Logger.notice("Request vote to server #{peer.peer}")
+        request = Raft.Server.RequestVoteParams.new(term: state.current_term)
+
+        case Raft.Server.GRPC.Stub.request_vote(peer.channel, request) do
+          {:ok, reply} ->
+            new_state = %Raft.State{
+              membership_state: membership_state,
+              current_term: state.current_term,
+              voted_for: [ reply.candidate_id | state.voted_for ]
+            }
+            Raft.Config.put("state", new_state)
+            Logger.notice("Vote granted from #{reply.candidate_id}")
+
+            if reply.term > new_state.current_term do
+              throw(:fallback)
+            end
+
+            if reply.vote do
+              throw(:elected)
+            end
+          {_, err} ->
+            Logger.error("Failed in request vote: #{err}")
+        end
+      end
+    catch
+      :fallback ->
+        Logger.notice("Newer term discovered")
+      :elected ->
+        Logger.notice("Election won with term #{state.current_term}")
     end
+    state = Raft.Config.get("state")
 
     run(state.membership_state)
   end
@@ -66,10 +96,22 @@ defmodule Raft.Server do
   def init(state, arguments) do
     # initialize metadata
     metadata = metadata(id: :rand.uniform(100000))
-    peers = Keyword.get_values(arguments, :peer)
 
     Logger.notice("Starting server with id \##{metadata(metadata, :id)}")
-    Logger.debug("Peers: #{inspect(peers)}")
+
+    peers = arguments
+      |> Keyword.get_values(:peer)
+      |> Enum.map(fn peer ->
+        Logger.notice("Connecting to peer #{peer}")
+        case GRPC.Stub.connect(peer) do
+          {:ok, channel} ->
+            Logger.notice("Connected with peer #{peer}")
+            %{peer: peer, channel: channel}
+          {:error, err} ->
+            Logger.error("Failed to connect with the peer: #{err}")
+            %{peer: peer, channel: nil}
+        end
+      end)
 
     # Configure Config and GRCP processes
     children = [
@@ -93,6 +135,7 @@ defmodule Raft.Server do
     # Update raft central state
     Raft.Config.put("metadata", metadata)
     Raft.Config.put("state", state)
+    Raft.Config.put("peers", peers)
     run(state.membership_state)
     Logger.notice("Shutting down server with id \##{metadata(metadata, :id)}")
     {:ok}

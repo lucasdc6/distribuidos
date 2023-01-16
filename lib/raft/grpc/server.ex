@@ -9,7 +9,8 @@ defmodule Raft.GRPC.Server do
     state = Raft.Config.get("state")
     Raft.Server.RequestVoteReply.new(
       server_id: Raft.Server.metadata(metadata, :id),
-      vote: state.current_term < request.current_term
+      term: state.current_term,
+      vote: state.current_term < request.term
     )
   end
 

@@ -7,12 +7,13 @@ service GRPC {
 }
 
 message RequestVoteParams {
-  int64 current_term = 1;
+  int64 term = 1;
 }
 
 message RequestVoteReply {
-  int64 server_id = 1;
-  bool vote       = 2;
+  int64 term         = 1;
+  int64 candidate_id = 2;
+  bool vote          = 3;
 }
 
 message SetMembershipParams {

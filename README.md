@@ -34,8 +34,8 @@
 
 ### Interactuar usando el módulo Raft.Client
 
-```
-make repl
+```elixir
+$ make repl
 iex(1)> Raft.Client.vote
 {:ok,
  %Raft.Server.RequestVoteReply{
