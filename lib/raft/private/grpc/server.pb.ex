@@ -14,6 +14,13 @@ defmodule Raft.Server.RequestVoteReply do
   field :vote, 3, type: :bool
 end
 
+defmodule Raft.Server.SetTermParams do
+  @moduledoc false
+  use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
+
+  field :term, 1, type: :int64
+end
+
 defmodule Raft.Server.SetMembershipParams do
   @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
@@ -21,7 +28,7 @@ defmodule Raft.Server.SetMembershipParams do
   field :membership_state, 1, type: :string, json_name: "membershipState"
 end
 
-defmodule Raft.Server.SetMembershipReply do
+defmodule Raft.Server.ResultReply do
   @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
 
@@ -34,7 +41,9 @@ defmodule Raft.Server.GRPC.Service do
 
   rpc :RequestVote, Raft.Server.RequestVoteParams, Raft.Server.RequestVoteReply
 
-  rpc :SetMembership, Raft.Server.SetMembershipParams, Raft.Server.SetMembershipReply
+  rpc :SetMembership, Raft.Server.SetMembershipParams, Raft.Server.ResultReply
+
+  rpc :SetTerm, Raft.Server.SetTermParams, Raft.Server.ResultReply
 end
 
 defmodule Raft.Server.GRPC.Stub do

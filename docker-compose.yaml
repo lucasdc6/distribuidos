@@ -1,0 +1,31 @@
+---
+version: '3.8'
+
+services:
+  server01:
+    image: distribuidos:dev
+    build: .
+    command:
+      - -v=debug
+      - --peer=server02:50051
+      - --peer=server03:50051
+    ports:
+      - 50051:50051
+  server02:
+    image: distribuidos:dev
+    build: .
+    command:
+      - -v=debug
+      - --peer=server01:50051
+      - --peer=server03:50051
+    ports:
+      - 50052:50051
+  server03:
+    image: distribuidos:dev
+    build: .
+    command:
+      - -v=debug
+      - --peer=server01:50051
+      - --peer=server02:50051
+    ports:
+      - 50053:50051
