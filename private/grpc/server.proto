@@ -1,5 +1,5 @@
 syntax = "proto3";
-package Raft.Server;
+package raft.server;
 
 service GRPC {
   rpc RequestVote (RequestVoteParams) returns (RequestVoteReply);
