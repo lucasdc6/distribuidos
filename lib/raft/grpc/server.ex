@@ -28,6 +28,76 @@ defmodule Raft.GRPC.Server do
     end
   end
 
+  def send_heartbeat(server_id, state, peer) do
+    request = Raft.Server.AppendEntriesParams.new(
+      term: state.current_term,
+      leader_id: server_id,
+      prev_log_index: state.last_index,
+      prev_log_term: state.current_term,
+      entries: [],
+      leader_commit: state.commit_index
+    )
+    case Raft.Server.GRPC.Stub.append_entries(peer.channel, request) do
+      {:ok, %{success: true}} ->
+        next_index = Raft.State.update_next_index(
+            state.next_index,
+            peer.peer,
+            0
+          )
+        Logger.info("Successful heartbeat from #{peer.peer} - #{inspect(next_index)}")
+
+        Raft.Config.put("state", %Raft.State{
+          state |
+          next_index: next_index
+        })
+
+      {:ok, %{success: false, term: reply_term}} ->
+        Logger.info("Unsuccessful heartbeat from #{peer.peer}")
+        next_index = Enum.find(state.next_index, %{value: 0}, fn elem ->
+          elem.server_id == peer.peer
+        end)
+        Logger.debug("Next index: #{inspect(next_index)}")
+        cond do
+          reply_term > state.current_term ->
+            Logger.info("Newer term discovered: #{reply_term}")
+            Raft.Config.put("state", %Raft.State{
+              state |
+              membership_state: :follower
+            })
+          next_index.value > 0 ->
+            next_index = Raft.State.update_next_index(
+              state.next_index,
+              peer.peer,
+              next_index.value - 1
+            )
+            Raft.Config.put("state", %Raft.State{
+              state |
+              next_index: next_index
+            })
+            Logger.info("Retry heartbeat with next_index = #{next_index.value}")
+            send_heartbeat(server_id, state, peer)
+          true ->
+            Logger.error("Error")
+        end
+      {_, err} ->
+        Logger.error("Error on heartbeat from #{peer.peer}: #{err}")
+    end
+  end
+
+  ###########
+  # Helpers #
+  ###########
+  defp check_entries(%Raft.State{logs: []}, _) do
+    true
+  end
+
+  defp check_entries(state, request) do
+    Enum.any?(state.logs, &(&1.index == request.prev_log_index and &1.term == request.prev_log_term))
+  end
+
+  #######################
+  # Standard Procedures #
+  #######################
   @spec request_vote(Raft.Server.RequestVoteParams.t(), GRPC.Server.Stream.t())
         :: Raft.Server.RequestVoteReply.t()
   def request_vote(request, _stream) do
@@ -37,6 +107,51 @@ defmodule Raft.GRPC.Server do
       candidate_id: Raft.Server.metadata(metadata, :id),
       term: state.current_term,
       vote: state.current_term < request.term
+    )
+  end
+
+  def append_entries(request, _stream) do
+    state = Raft.Config.get("state")
+    Logger.debug("Current state: #{inspect(state)}")
+    success = check_entries(state, request)
+    index = state.last_index + 1
+    entries = Enum.map(request.entries, fn entry ->
+      %{index: index, term: state.current_term, command: entry}
+    end)
+    Logger.info("AppendEntries state #{success}")
+
+    Raft.Config.put("state", %Raft.State{
+      state |
+      logs: state.logs ++ entries
+    })
+
+    Raft.Server.AppendEntriesReply.new(
+      term: state.current_term,
+      success: success
+    )
+  end
+
+  ###########################
+  # Non Standard Procedures #
+  ###########################
+  def run_command(request, _stream) do
+    state = Raft.Config.get("state")
+    index = state.last_index + 1
+
+    # If command received from client:
+    # * append entry to local log
+    # * respond after entry applied to state machine - TODO
+    if state.membership_state == :leader do
+      Raft.Config.put("state", %Raft.State{
+        state |
+        last_index: index,
+        logs: state.logs ++ [%{index: index, term: state.current_term, command: request.command}]
+      })
+    end
+
+    # Wait until entry is applied
+    Raft.Server.ResultReply.new(
+      result: state.membership_state == :leader
     )
   end
 
@@ -53,6 +168,7 @@ defmodule Raft.GRPC.Server do
     )
   end
 
+  @spec set_term(atom | %{:term => any, optional(any) => any}, any) :: struct
   def set_term(request, _stream) do
     state = Raft.Config.get("state")
     Raft.Config.put("state", %Raft.State{

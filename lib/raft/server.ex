@@ -21,15 +21,23 @@ defmodule Raft.Server do
     state = Raft.Config.get("state")
     Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
 
-    run(state.membership_state)
+    run(state)
   end
 
   def run(state = %{membership_state: :candidate}) do
-    timeout = Enum.random(4000..6000)
     Logger.notice("Node in #{state.membership_state} mode")
-    Process.sleep(timeout)
+    metadata = Raft.Config.get("metadata")
 
-    state = %Raft.State{state | current_term: state.current_term + 1}
+    # On conversion to candidate, start election:
+    #  * Increment currentTerm
+    #  * Vote for self
+    #  * Reset election timer - TODO
+    #  * Send RequestVote RPCs to all other servers
+    state = %Raft.State{
+      state |
+      current_term: state.current_term + 1,
+      voted_for: state.voted_for ++ [metadata(metadata, :id)]
+    }
     Raft.Config.put("state", state)
 
     peers = Raft.Config.get("peers")
@@ -50,7 +58,7 @@ defmodule Raft.Server do
                   current_term: reply.term,
                   voted_for: []
                 })
-                throw(:fallback)
+                throw(%{code: :fallback, term: reply.term})
               reply.vote ->
                 new_state = %Raft.State{
                   state |
@@ -66,7 +74,7 @@ defmodule Raft.Server do
                     current_term: state.current_term,
                     voted_for: new_state.voted_for
                   })
-                  throw(:elected)
+                throw(%{code: :elected})
                 end
               true ->
                 Logger.info("Denied vote")
@@ -76,9 +84,9 @@ defmodule Raft.Server do
         end
       end
     catch
-      :fallback ->
-        Logger.notice("Newer term discovered")
-      :elected ->
+      %{code: :fallback, term: term} ->
+        Logger.notice("Newer term discovered: #{term}")
+      %{code: :elected} ->
         Logger.notice("Election won with term #{state.current_term}")
       _ ->
         Logger.error("Unkwnown error")
@@ -92,10 +100,51 @@ defmodule Raft.Server do
   def run(state = %{membership_state: :leader}) do
     timeout = Enum.random(4000..6000)
     Logger.notice("Node in #{state.membership_state} mode")
+
+    peers = Raft.Config.get("peers")
+    metadata = Raft.Config.get("metadata")
+
+    Enum.map(peers, fn(peer) ->
+      # Upon election: send initial empty AppendEntries RPCs
+      # (heartbeat) to each server; repeat during idle periods to
+      # prevent election timeouts (§5.2)
+
+      state = Raft.Config.get("state")
+      Raft.GRPC.Server.send_heartbeat(metadata(metadata, :id), state, peer)
+    end)
+
     Process.sleep(timeout)
 
     state = Raft.Config.get("state")
-    Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
+    state.logs
+    |> Enum.drop_while(&(&1.index > state.last_index))
+    |> Enum.map(fn(log) ->
+      Enum.map(peers, fn(peer) ->
+        request = Raft.Server.AppendEntriesParams.new(
+          term: state.current_term,
+          leader_id: metadata(metadata, :id),
+          # FIX - change the real log term
+          prev_log_term: state.current_term,
+          prev_log_index: state.last_index,
+          entries: [log.command],
+          leader_commit: state.commit_index
+        )
+        Logger.debug("Sending log entries (#{inspect(log)}) ) to #{peer.peer}")
+
+        case Raft.Server.GRPC.Stub.append_entries(peer.channel, request) do
+          {:ok, %{success: true}} ->
+            Logger.info("Applied log entries (#{inspect(log)})")
+
+          {:ok, %{success: false, term: term}} ->
+            Logger.info("Newer term discovered: #{term}")
+
+          {_, err} ->
+            Logger.error("Error applying entry #{log}: #{err}")
+        end
+      end)
+    end)
+    Logger.debug("state: #{inspect(state)}")
+    #Logger.debug("not applied logs: #{inspect(not_applied_logs)}")
 
     run(state)
   end
@@ -151,7 +200,7 @@ defmodule Raft.Server do
     Raft.Config.put("state", state)
     Raft.Config.put("peers", peers)
 
-    run(state.membership_state)
+    run(state)
     Logger.notice("Shutting down server with id \##{metadata(metadata, :id)}")
     {:ok}
   end

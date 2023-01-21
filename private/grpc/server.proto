@@ -5,6 +5,8 @@ service GRPC {
   rpc RequestVote (RequestVoteParams) returns (RequestVoteReply);
   rpc SetMembership (SetMembershipParams) returns (ResultReply);
   rpc SetTerm (SetTermParams) returns (ResultReply);
+  rpc AppendEntries(AppendEntriesParams) returns (AppendEntriesReply);
+  rpc RunCommand(RunCommandParams) returns (ResultReply);
 }
 
 message RequestVoteParams {
@@ -25,6 +27,24 @@ message SetMembershipParams {
   string membership_state = 1;
 }
 
+message AppendEntriesParams {
+  int64          term           = 1;
+  int64          leader_id      = 2;
+  int64          prev_log_index = 3;
+  int64          prev_log_term  = 4;
+  repeated int64 entries        = 5;
+  int64          leader_commit  = 6;
+}
+
+message RunCommandParams{
+  int64 command = 1;
+}
+
 message ResultReply {
   bool result = 1;
+}
+
+message AppendEntriesReply {
+  int64 term   = 1;
+  bool success = 2;
 }
