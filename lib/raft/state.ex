@@ -4,12 +4,13 @@ defmodule Raft.State do
   """
   defstruct current_term: 1,
             membership_state: :follower,
-            voted_for: [],
+            voted_for: nil,
             logs: [],
             last_index: 0,
             commit_index: 0,
             last_applied: 0,
-            next_index: []
+            next_index: [],
+            votes: []
 
   @spec update_next_index(list, Integer.t(), any) :: list
   def update_next_index(next_index, id, value) do

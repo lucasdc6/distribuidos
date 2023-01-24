@@ -101,13 +101,22 @@ defmodule Raft.GRPC.Server do
   @spec request_vote(Raft.Server.RequestVoteParams.t(), GRPC.Server.Stream.t())
         :: Raft.Server.RequestVoteReply.t()
   def request_vote(request, _stream) do
-    metadata = Raft.Config.get("metadata")
     state = Raft.Config.get("state")
-    Raft.Server.RequestVoteReply.new(
-      candidate_id: Raft.Server.metadata(metadata, :id),
-      term: state.current_term,
-      vote: state.current_term < request.term
-    )
+    case state.voted_for do
+      nil ->  Raft.Config.put("state", %Raft.State{
+                state |
+                voted_for: request.candidate_id
+              })
+              Raft.Server.RequestVoteReply.new(
+                term: state.current_term,
+                vote_granted: state.current_term <= request.term && state.last_index <= request.last_log_index
+              )
+
+      _ ->    Raft.Server.RequestVoteReply.new(
+                term: state.current_term,
+                vote_granted: false
+              )
+    end
   end
 
   def append_entries(request, _stream) do

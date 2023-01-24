@@ -36,17 +36,20 @@ defmodule Raft.Server do
     state = %Raft.State{
       state |
       current_term: state.current_term + 1,
-      voted_for: state.voted_for ++ [metadata(metadata, :id)]
+      votes: state.votes ++ [metadata(metadata, :id)]
     }
     Raft.Config.put("state", state)
-
     peers = Raft.Config.get("peers")
     votes_needed = ceil(length(peers) / 2 + 1)
     Logger.info("Votes needed for the quorum: #{votes_needed}")
     try do
       for peer <- peers do
         Logger.notice("Request vote to server #{peer.peer}")
-        request = Raft.Server.RequestVoteParams.new(term: state.current_term)
+        request = Raft.Server.RequestVoteParams.new(
+          term: state.current_term,
+          last_log_index: state.last_index,
+          candidate_id: metadata(metadata, :id)
+        )
 
         case Raft.Server.GRPC.Stub.request_vote(peer.channel, request) do
           {:ok, reply} ->
@@ -56,23 +59,23 @@ defmodule Raft.Server do
                 Raft.Config.put("state", %Raft.State{
                   membership_state: :follower,
                   current_term: reply.term,
-                  voted_for: []
+                  votes: []
                 })
                 throw(%{code: :fallback, term: reply.term})
               reply.vote ->
                 new_state = %Raft.State{
                   state |
-                  voted_for: [ reply.candidate_id | state.voted_for ]
+                  votes: [ peer | state.votes ]
                 }
                 Raft.Config.put("state", new_state)
                 Logger.notice("Vote granted from #{reply.candidate_id}")
-                Logger.info("Vote count: #{length(new_state.voted_for)}")
+                Logger.info("Vote count: #{length(new_state.votes)}")
 
-                if votes_needed <= length(new_state.voted_for) do
+                if votes_needed <= length(new_state.votes) do
                   Raft.Config.put("state", %Raft.State{
                     membership_state: :leader,
                     current_term: state.current_term,
-                    voted_for: new_state.voted_for
+                    votes: new_state.votes
                   })
                 throw(%{code: :elected})
                 end

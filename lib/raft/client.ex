@@ -23,7 +23,7 @@ defmodule Raft.Client do
     {:ok, _reply} = channel |> Raft.Server.GRPC.Stub.request_vote(request)
   end
 
-  def append_entrties() do
+  def append_entries() do
     channel = connect()
     request = Raft.Server.AppendEntriesParams.new(entries: [1,2,3])
     {:ok, _reply} = channel |> Raft.Server.GRPC.Stub.append_entries(request)
