@@ -27,24 +27,27 @@ defmodule Raft.Server do
   def run(state = %{membership_state: :candidate}) do
     Logger.notice("Node in #{state.membership_state} mode")
     metadata = Raft.Config.get("metadata")
+    Raft.Config.put("state", %Raft.State{
+      state |
+      current_term: state.current_term + 1,
+      votes: [metadata(metadata, :id)],
+      voted_for: metadata(metadata, :id)
+      })
 
+    timeout = Enum.random(4000..6000)
+    Process.sleep(timeout)
     # On conversion to candidate, start election:
     #  * Increment currentTerm
     #  * Vote for self
     #  * Reset election timer - TODO
     #  * Send RequestVote RPCs to all other servers
-    state = %Raft.State{
-      state |
-      current_term: state.current_term + 1,
-      votes: state.votes ++ [metadata(metadata, :id)]
-    }
-    Raft.Config.put("state", state)
     peers = Raft.Config.get("peers")
     votes_needed = ceil(length(peers) / 2 + 1)
     Logger.info("Votes needed for the quorum: #{votes_needed}")
     try do
       for peer <- peers do
         Logger.notice("Request vote to server #{peer.peer}")
+        state = Raft.Config.get("state")
         request = Raft.Server.RequestVoteParams.new(
           term: state.current_term,
           last_log_index: state.last_index,
@@ -62,17 +65,18 @@ defmodule Raft.Server do
                   votes: []
                 })
                 throw(%{code: :fallback, term: reply.term})
-              reply.vote ->
+              reply.vote_granted ->
                 new_state = %Raft.State{
                   state |
-                  votes: [ peer | state.votes ]
+                  votes: [peer.peer] ++ state.votes
                 }
                 Raft.Config.put("state", new_state)
-                Logger.notice("Vote granted from #{reply.candidate_id}")
-                Logger.info("Vote count: #{length(new_state.votes)}")
+                Logger.notice("Vote granted from #{peer.peer}")
+                Logger.info("Vote count: #{length(new_state.votes)} - #{inspect(new_state.votes)}")
 
                 if votes_needed <= length(new_state.votes) do
                   Raft.Config.put("state", %Raft.State{
+                    state |
                     membership_state: :leader,
                     current_term: state.current_term,
                     votes: new_state.votes

@@ -131,13 +131,21 @@ defmodule Raft.GRPC.Server do
 
     Raft.Config.put("state", %Raft.State{
       state |
-      logs: state.logs ++ entries
+      logs: state.logs ++ entries,
+      membership_state: keep_or_change(state.membership_state)
     })
 
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
     )
+  end
+
+  defp keep_or_change(membership_state) do
+    case membership_state do
+      :candidate -> :follower
+      _ -> membership_state
+    end
   end
 
   ###########################
@@ -174,19 +182,6 @@ defmodule Raft.GRPC.Server do
 
     Raft.Server.ResultReply.new(
       result: valid_membership_state
-    )
-  end
-
-  @spec set_term(atom | %{:term => any, optional(any) => any}, any) :: struct
-  def set_term(request, _stream) do
-    state = Raft.Config.get("state")
-    Raft.Config.put("state", %Raft.State{
-      current_term: request.term,
-      membership_state: state.membership_state
-    })
-
-    Raft.Server.ResultReply.new(
-      result: true
     )
   end
 end
