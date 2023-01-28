@@ -2,7 +2,57 @@
 
 ## Dependencias
 
-* [`protobuf-compiler`](https://grpc.io/docs/protoc-installation)
+### Base
+
+Las siguientes son las dependencias del sistema necesarias para tener
+funcionando `asdf` e instalar las herramientas
+
+* `git`
+* `curl`
+* `make`
+* `unzip`
+* `gcc`
+* `g++`
+* `libssl-dev`
+* `automake`
+* `autoconf`
+* `libncurses5-dev`
+
+#### Debian
+
+```bash
+sudo apt update
+sudo apt install -y git curl make unzip g++ libssl-dev automake autoconf libncurses5-dev
+```
+
+### ASDF
+
+```
+git clone https://github.com/asdf-vm/asdf.git ~/.asdf --branch v0.11.1
+# Se recomienda agregar la siguiente línea a tu `bashrc`, `zshrc`, etc
+. ~/.asdf/asdf.sh
+```
+
+#### Herramientas
+
+Las siguientes son las herramientas usadas para el desarrollo del proyecto,
+todas son gestionadas mediante `asdf`.
+
+* `elixir`: 1.14.2-otp-25
+* `erlang`: 25.2
+* `grpcurl`: 1.8.7
+* `protolint`: 0.42.2
+* `protoc`: 3.20.3
+
+Para poner en funcionamiento, seguir los siguientes pasos:
+
+```bash
+make asdf-plugins
+asdf install
+mix local.hex --force
+mix escript.install hex protobuf --force
+asdf reshim
+```
 
 ## GRPC
 

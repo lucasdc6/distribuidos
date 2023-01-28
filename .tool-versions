@@ -1,2 +1,5 @@
 elixir 1.14.2-otp-25
 erlang 25.2
+grpcurl 1.8.7
+protolint 0.42.2
+protoc 3.20.3
