@@ -23,7 +23,8 @@ defmodule Distribuidos.MixProject do
   defp deps do
     [
       {:grpc, git:  "https://github.com/elixir-grpc/grpc"},
-      {:protobuf, "~> 0.11"}
+      {:protobuf, "~> 0.11"},
+      {:poison, "~> 5.0"}
     ]
   end
 end
