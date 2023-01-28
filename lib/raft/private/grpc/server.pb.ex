@@ -15,13 +15,6 @@ defmodule Raft.Server.RequestVoteReply do
   field :vote_granted, 2, type: :bool, json_name: "voteGranted"
 end
 
-defmodule Raft.Server.SetTermParams do
-  @moduledoc false
-  use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
-
-  field :term, 1, type: :int64
-end
-
 defmodule Raft.Server.SetMembershipParams do
   @moduledoc false
   use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
@@ -70,8 +63,6 @@ defmodule Raft.Server.GRPC.Service do
   rpc :RequestVote, Raft.Server.RequestVoteParams, Raft.Server.RequestVoteReply
 
   rpc :SetMembership, Raft.Server.SetMembershipParams, Raft.Server.ResultReply
-
-  rpc :SetTerm, Raft.Server.SetTermParams, Raft.Server.ResultReply
 
   rpc :AppendEntries, Raft.Server.AppendEntriesParams, Raft.Server.AppendEntriesReply
 
