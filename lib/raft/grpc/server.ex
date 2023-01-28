@@ -101,13 +101,22 @@ defmodule Raft.GRPC.Server do
   @spec request_vote(Raft.Server.RequestVoteParams.t(), GRPC.Server.Stream.t())
         :: Raft.Server.RequestVoteReply.t()
   def request_vote(request, _stream) do
-    metadata = Raft.Config.get("metadata")
     state = Raft.Config.get("state")
-    Raft.Server.RequestVoteReply.new(
-      candidate_id: Raft.Server.metadata(metadata, :id),
-      term: state.current_term,
-      vote: state.current_term < request.term
-    )
+    case state.voted_for do
+      nil ->  Raft.Config.put("state", %Raft.State{
+                state |
+                voted_for: request.candidate_id
+              })
+              Raft.Server.RequestVoteReply.new(
+                term: state.current_term,
+                vote_granted: state.current_term <= request.term && state.last_index <= request.last_log_index
+              )
+
+      _ ->    Raft.Server.RequestVoteReply.new(
+                term: state.current_term,
+                vote_granted: false
+              )
+    end
   end
 
   def append_entries(request, _stream) do
@@ -122,13 +131,21 @@ defmodule Raft.GRPC.Server do
 
     Raft.Config.put("state", %Raft.State{
       state |
-      logs: state.logs ++ entries
+      logs: state.logs ++ entries,
+      membership_state: keep_or_change(state.membership_state)
     })
 
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
     )
+  end
+
+  defp keep_or_change(membership_state) do
+    case membership_state do
+      :candidate -> :follower
+      _ -> membership_state
+    end
   end
 
   ###########################
@@ -165,19 +182,6 @@ defmodule Raft.GRPC.Server do
 
     Raft.Server.ResultReply.new(
       result: valid_membership_state
-    )
-  end
-
-  @spec set_term(atom | %{:term => any, optional(any) => any}, any) :: struct
-  def set_term(request, _stream) do
-    state = Raft.Config.get("state")
-    Raft.Config.put("state", %Raft.State{
-      current_term: request.term,
-      membership_state: state.membership_state
-    })
-
-    Raft.Server.ResultReply.new(
-      result: true
     )
   end
 end

@@ -3,6 +3,8 @@ defmodule Raft.Server.RequestVoteParams do
   use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
 
   field :term, 1, type: :int64
+  field :candidate_id, 2, type: :int64, json_name: "candidateId"
+  field :last_log_index, 3, type: :int64, json_name: "lastLogIndex"
 end
 
 defmodule Raft.Server.RequestVoteReply do
@@ -10,8 +12,7 @@ defmodule Raft.Server.RequestVoteReply do
   use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
 
   field :term, 1, type: :int64
-  field :candidate_id, 2, type: :int64, json_name: "candidateId"
-  field :vote, 3, type: :bool
+  field :vote_granted, 2, type: :bool, json_name: "voteGranted"
 end
 
 defmodule Raft.Server.SetTermParams do
