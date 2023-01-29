@@ -1,0 +1,5 @@
+- Timers elecciones
+- Timers para followers, paso a candidato
+- Reconexión de nodo ante caida
+- Replicación de logs
+- Request en paralelo

@@ -58,8 +58,6 @@ defmodule Raft.CLI do
 
     if opts[:loglevel] do
       Logger.configure(level: String.to_atom(opts[:loglevel]))
-    else
-      Logger.configure(level: :notice)
     end
 
     statepath = opts[:statepath] || "/tmp/.raft.state"
