@@ -96,7 +96,7 @@ defmodule Raft.Server do
       %{code: :elected} ->
         Logger.notice("Election won with term #{state.current_term}")
       _ ->
-        Logger.error("Unkwnown error")
+        Logger.error("Unknown error")
     end
     Logger.debug("Refresh state")
     state = Raft.Config.get("state")
