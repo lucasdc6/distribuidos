@@ -44,14 +44,10 @@ todas son gestionadas mediante `asdf`.
 * `protolint`: 0.42.2
 * `protoc`: 3.20.3
 
-Para poner en funcionamiento, seguir los siguientes pasos:
+Para instalar todas las herramientas, ejecutar:
 
 ```bash
-make asdf-plugins
-asdf install
-mix local.hex --force
-mix escript.install hex protobuf --force
-asdf reshim
+make install-tools
 ```
 
 ## GRPC

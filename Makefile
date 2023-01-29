@@ -9,6 +9,13 @@ deps:
 repl:
 	iex -S mix
 
+install-tools:
+	make asdf-plugins
+	asdf install
+	mix local.hex --force
+	mix escript.install hex protobuf --force
+	asdf reshim
+
 asdf-plugins:
 	@echo "Adding asdf plugins"
 	-@awk '{print $$1}' .tool-versions | xargs -I{} asdf plugin add {}
