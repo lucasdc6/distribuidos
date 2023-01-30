@@ -132,6 +132,7 @@ defmodule Raft.GRPC.Server do
     Raft.Config.put("state", %Raft.State{
       state |
       logs: state.logs ++ entries,
+      voted_for: nil,
       membership_state: keep_or_change(state.membership_state),
       current_term: update_term(state.current_term, request.term)
     })
