@@ -3,3 +3,4 @@
 - Re-conexión de nodo ante caída
 - Replicación de logs
 - Request en paralelo | [x] Vanza
+- Redirigir comandos al lider
