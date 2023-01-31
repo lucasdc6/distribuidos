@@ -1,5 +1,6 @@
-- Timers elecciones
-- Timers para followers, paso a candidato
-- Reconexión de nodo ante caida
+- Timers elecciones | [x] Lucas
+- Timers para followers, paso a candidato | [x] Lucas
+- Re-conexión de nodo ante caída
 - Replicación de logs
-- Request en paralelo
+- Request en paralelo | [x] Vanza
+- Redirigir comandos al lider
