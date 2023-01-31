@@ -14,11 +14,16 @@ defmodule Raft.Server do
   Run the main Raft process
   """
   def run(state = %{membership_state: :follower}) do
-    timeout = Enum.random(4000..6000)
+    timeout = Enum.random(2000..6000)
     Logger.notice("Node in #{state.membership_state} mode")
-    Process.sleep(timeout)
-
     state = Raft.Config.get("state")
+
+    if is_nil(state.heartbeat_timer_ref) do
+      Logger.info("Started timer")
+      Raft.Timer.start(state, :heartbeat_timer_ref, timeout)
+    end
+
+    Process.sleep(1000)
     Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
 
     run(state)
@@ -195,6 +200,7 @@ defmodule Raft.Server do
     opts = [strategy: :one_for_one, name: Raft]
     # Start process
     Supervisor.start_link(children, opts)
+    :timer.start
 
     peers = arguments
       |> Keyword.get_values(:peer)

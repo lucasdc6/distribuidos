@@ -135,6 +135,8 @@ defmodule Raft.GRPC.Server do
       membership_state: keep_or_change(state.membership_state)
     })
 
+    Raft.Timer.restart(state, :heartbeat_timer_ref)
+
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
