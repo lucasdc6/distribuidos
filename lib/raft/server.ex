@@ -49,17 +49,28 @@ defmodule Raft.Server do
     peers = Raft.Config.get("peers")
     votes_needed = ceil(length(peers) / 2 + 1)
     Logger.info("Votes needed for the quorum: #{votes_needed}")
-    try do
-      for peer <- peers do
-        Logger.notice("Request vote to server #{peer.peer}")
-        state = Raft.Config.get("state")
-        request = Raft.Server.RequestVoteParams.new(
-          term: state.current_term,
-          last_log_index: state.last_index,
-          candidate_id: metadata(metadata, :id)
-        )
 
-        case Raft.Server.GRPC.Stub.request_vote(peer.channel, request) do
+    request = Raft.Server.RequestVoteParams.new(
+      term: state.current_term,
+      last_log_index: state.last_index,
+      candidate_id: metadata(metadata, :id)
+    )
+    tasks = peers
+            |> Enum.map(fn(peer) ->
+                 Task.async(fn() -> %{
+                   vote: Raft.Server.GRPC.Stub.request_vote(peer.channel, request),
+                   peer: peer.peer}
+                 end)
+               end)
+
+    responses = Task.await_many(tasks)
+
+    try do
+      for response <- responses do
+        Logger.notice("Request vote to server #{response.peer}")
+        state = Raft.Config.get("state")
+
+        case response.vote do
           {:ok, reply} ->
             Logger.debug("request_vote response: #{inspect(reply)}")
             cond do
@@ -73,10 +84,10 @@ defmodule Raft.Server do
               reply.vote_granted ->
                 new_state = %Raft.State{
                   state |
-                  votes: [peer.peer] ++ state.votes
+                  votes: [response.peer] ++ state.votes
                 }
                 Raft.Config.put("state", new_state)
-                Logger.notice("Vote granted from #{peer.peer}")
+                Logger.notice("Vote granted from #{response.peer}")
                 Logger.info("Vote count: #{length(new_state.votes)} - #{inspect(new_state.votes)}")
 
                 if votes_needed <= length(new_state.votes) do
@@ -101,7 +112,7 @@ defmodule Raft.Server do
       %{code: :elected} ->
         Logger.notice("Election won with term #{state.current_term}")
       _ ->
-        Logger.error("Unkwnown error")
+        Logger.error("Unknown error")
     end
     Logger.debug("Refresh state")
     state = Raft.Config.get("state")

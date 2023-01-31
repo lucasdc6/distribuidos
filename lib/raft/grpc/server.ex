@@ -132,15 +132,22 @@ defmodule Raft.GRPC.Server do
     Raft.Config.put("state", %Raft.State{
       state |
       logs: state.logs ++ entries,
-      membership_state: keep_or_change(state.membership_state)
+      voted_for: nil,
+      membership_state: keep_or_change(state.membership_state),
+      current_term: update_term(state.current_term, request.term)
     })
 
     Raft.Timer.restart(state, :heartbeat_timer_ref)
+    updated_state = Raft.Config.get("state")
 
     Raft.Server.AppendEntriesReply.new(
-      term: state.current_term,
+      term: updated_state.current_term,
       success: success
     )
+  end
+
+  defp update_term(current_term, request_term) do
+    if request_term > current_term, do: request_term, else: current_term
   end
 
   defp keep_or_change(membership_state) do
