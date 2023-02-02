@@ -14,13 +14,13 @@ defmodule Raft.Server do
   Run the main Raft process
   """
   def run(state = %{membership_state: :follower}) do
-    timeout = Enum.random(2000..6000)
+    timeout = Enum.random(200..5000)
     Logger.notice("Node in #{state.membership_state} mode")
     state = Raft.Config.get("state")
 
     if is_nil(state.heartbeat_timer_ref) do
       Logger.info("Started timer")
-      Raft.Timer.start(state, :heartbeat_timer_ref, timeout)
+      Raft.Timer.set(state, :heartbeat_timer_ref, timeout)
     end
 
     Process.sleep(1000)

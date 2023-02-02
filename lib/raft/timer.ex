@@ -1,9 +1,19 @@
 defmodule Raft.Timer do
   require Logger
 
-  @spec start(Raft.State, atom(), Integer.t()) :: {:ok, :timer.tref()} | {:error, String.t()}
-  def start(state, timer, timeout \\ 5000) do
-    case :timer.apply_after(timeout, Raft.Config, :put, ["state", %Raft.State{state | membership_state: :candidate}]) do
+  def timeout(overwrite) do
+    state = Raft.Config.get("state")
+
+    Raft.Config.put("state", Map.merge(state, overwrite))
+  end
+
+  def set(state, timer, timeout \\ 5000) do
+    timer_ref = Map.get(state, timer)
+    overwrite = Map.put(%{membership_state: :candidate}, timer, nil)
+
+    if timer_ref, do: cancel(state, timer)
+
+    case :timer.apply_after(timeout, Raft.Config, :timeout, [overwrite]) do
       {:ok, ref} ->
         Raft.Config.put("state", Map.put(state, timer, ref))
         {:ok, ref}
@@ -12,7 +22,6 @@ defmodule Raft.Timer do
     end
   end
 
-  @spec cancel(Raft.State, atom()) :: {:error, any} | {:ok, :cancel}
   def cancel(state, timer) do
     Logger.info("Cancel timer")
     timer_ref = Map.get(state, timer)
@@ -23,11 +32,4 @@ defmodule Raft.Timer do
         Logger.error("Error canceling the timer: #{err}")
     end
   end
-
-  @spec restart(Raft.State, atom(), Integer.t()) :: {:ok, :timer.tref()} | {:error, String.t()}
-  def restart(state, timer, timeout \\ 5000) do
-    cancel(state, timer)
-    start(state, timer, timeout)
-  end
-
 end
