@@ -148,8 +148,9 @@ defmodule Raft.Server do
 
       case response.append_reply do
         {:ok, %{success: true}} ->
-          next_index = Raft.State.update_next_index(state, response.peer, state.last_applied, state.current_term)
-          Logger.info("Successful append entries from #{response.peer} - updating next index: #{inspect(next_index)}")
+          Logger.info("Successful append entries from #{response.peer}")
+          last_log = Raft.State.find_log(state.logs, state.current_term, state.last_applied)
+          next_index = Raft.State.update_next_index(state, response.peer, state.last_applied, last_log.term)
 
           Raft.Config.put("state", %Raft.State{
             state |
@@ -169,12 +170,15 @@ defmodule Raft.Server do
             follower_info.index > 0 ->
               Logger.info("Decrement follower index for next heartbeat")
 
+              decremented_index = follower_info.index - 1
+              prev_log = Raft.State.find_log(state.logs, state.current_term, decremented_index)
               next_index = Raft.State.update_next_index(
                 state,
                 response.peer,
                 follower_info.index - 1,
-                reply_term
+                prev_log.term
               )
+
               Raft.Config.put("state", %Raft.State{
                 state |
                 next_index: next_index

@@ -77,7 +77,15 @@ defmodule Raft.State do
   def initialize_next_index_for_leader(state, peers) do
     Enum.map(
       peers,
-      fn peer -> %{server_id: peer.peer, index: state.last_applied, term: state.current_term} end
+      fn peer -> %{
+          server_id: peer.peer,
+          index: state.last_applied,
+          term: find_log(state.logs, state.current_term, state.last_applied).term
+        } end
     )
+  end
+
+  def find_log(logs, default_term, index) do
+    Enum.find(logs, %{term: default_term}, fn log -> log.index == index end)
   end
 end
