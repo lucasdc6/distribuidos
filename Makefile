@@ -1,4 +1,4 @@
-.PHONY: deps
+.PHONY: deps test
 
 build:
 	mix escript.build
@@ -8,6 +8,12 @@ deps:
 
 repl:
 	iex -S mix
+
+test:
+	mix test
+
+coverage:
+	mix test --cover
 
 install-tools:
 	make asdf-plugins
