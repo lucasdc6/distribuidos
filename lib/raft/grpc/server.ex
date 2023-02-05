@@ -28,71 +28,19 @@ defmodule Raft.GRPC.Server do
     end
   end
 
-  def send_heartbeat(server_id, state, peer) do
-    request = Raft.Server.AppendEntriesParams.new(
-      term: state.current_term,
-      leader_id: server_id,
-      prev_log_index: state.last_index,
-      prev_log_term: state.current_term,
-      entries: [],
-      leader_commit: state.commit_index
-    )
-    case Raft.Server.GRPC.Stub.append_entries(peer.channel, request) do
-      {:ok, %{success: true}} ->
-        next_index = Raft.State.update_next_index(
-            state.next_index,
-            peer.peer,
-            0
-          )
-        Logger.info("Successful heartbeat from #{peer.peer} - #{inspect(next_index)}")
-
-        Raft.Config.put("state", %Raft.State{
-          state |
-          next_index: next_index
-        })
-
-      {:ok, %{success: false, term: reply_term}} ->
-        Logger.info("Unsuccessful heartbeat from #{peer.peer}")
-        next_index = Enum.find(state.next_index, %{value: 0}, fn elem ->
-          elem.server_id == peer.peer
-        end)
-        Logger.debug("Next index: #{inspect(next_index)}")
-        cond do
-          reply_term > state.current_term ->
-            Logger.info("Newer term discovered: #{reply_term}")
-            Raft.Config.put("state", %Raft.State{
-              state |
-              membership_state: :follower
-            })
-          next_index.value > 0 ->
-            next_index = Raft.State.update_next_index(
-              state.next_index,
-              peer.peer,
-              next_index.value - 1
-            )
-            Raft.Config.put("state", %Raft.State{
-              state |
-              next_index: next_index
-            })
-            Logger.info("Retry heartbeat with next_index = #{next_index.value}")
-            send_heartbeat(server_id, state, peer)
-          true ->
-            Logger.error("Error")
-        end
-      {_, err} ->
-        Logger.error("Error on heartbeat from #{peer.peer}: #{err}")
-    end
-  end
-
   ###########
   # Helpers #
   ###########
-  defp check_entries(%Raft.State{logs: []}, _) do
-    true
-  end
 
   defp check_entries(state, request) do
-    Enum.any?(state.logs, &(&1.index == request.prev_log_index and &1.term == request.prev_log_term))
+    cond do
+      request.prev_log_index == 0 -> true
+      true ->
+        Enum.any?(
+          state.logs,
+          &(&1.index == request.prev_log_index and &1.term == request.prev_log_term)
+        )
+    end
   end
 
   #######################
@@ -109,7 +57,7 @@ defmodule Raft.GRPC.Server do
               })
               Raft.Server.RequestVoteReply.new(
                 term: state.current_term,
-                vote_granted: state.current_term <= request.term && state.last_index <= request.last_log_index
+                vote_granted: state.current_term <= request.term && state.last_applied <= request.last_log_index
               )
 
       _ ->    Raft.Server.RequestVoteReply.new(
@@ -123,24 +71,21 @@ defmodule Raft.GRPC.Server do
     state = Raft.Config.get("state")
     Logger.debug("Current state: #{inspect(state)}")
     success = check_entries(state, request)
-    index = state.last_index + 1
-    entries = Enum.map(request.entries, fn entry ->
-      %{index: index, term: state.current_term, command: entry}
-    end)
-    Logger.info("AppendEntries state #{success}")
 
-    Raft.Config.put("state", %Raft.State{
-      state |
-      logs: state.logs ++ entries,
-      voted_for: nil,
-      membership_state: keep_or_change(state.membership_state),
-      current_term: update_term(state.current_term, request.term)
-    })
-
-    updated_state = Raft.Config.get("state")
-
+    if success do
+      old_logs = Enum.filter(state.logs, fn log -> log.index < request.prev_log_index + 1 end)
+      new_logs = old_logs ++ request.entries
+      Raft.Config.put("state", %Raft.State{
+        state |
+        logs: old_logs ++ request.entries,
+        last_applied: length(new_logs),
+        voted_for: nil,
+        membership_state: keep_or_change(state.membership_state),
+        current_term: update_term(state.current_term, request.term)
+      })
+    end
     Raft.Server.AppendEntriesReply.new(
-      term: updated_state.current_term,
+      term: state.current_term,
       success: success
     )
   end
@@ -161,7 +106,7 @@ defmodule Raft.GRPC.Server do
   ###########################
   def run_command(request, _stream) do
     state = Raft.Config.get("state")
-    index = state.last_index + 1
+    index = state.last_applied + 1
 
     # If command received from client:
     # * append entry to local log
@@ -169,8 +114,8 @@ defmodule Raft.GRPC.Server do
     if state.membership_state == :leader do
       Raft.Config.put("state", %Raft.State{
         state |
-        last_index: index,
-        logs: state.logs ++ [%{index: index, term: state.current_term, command: request.command}]
+        last_applied: index,
+        logs: state.logs ++ [%{index: index, term: state.current_term, command: inspect(request.command)}]
       })
     end
 
