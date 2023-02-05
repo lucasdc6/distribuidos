@@ -13,7 +13,9 @@ defmodule Raft.State do
             last_applied: 0,
             commit_index: 0,
             next_index: [],
-            votes: []
+            votes: [],
+            election_timer_ref: nil,
+            heartbeat_timer_ref: nil
 
   @spec save(String.t(), Raft.State) :: :ok | {:error, String.t()}
   @doc """

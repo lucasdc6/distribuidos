@@ -84,6 +84,9 @@ defmodule Raft.GRPC.Server do
         current_term: update_term(state.current_term, request.term)
       })
     end
+
+    Raft.Timer.set(state, :heartbeat_timer_ref)
+
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
