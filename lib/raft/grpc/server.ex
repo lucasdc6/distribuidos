@@ -95,6 +95,61 @@ defmodule Raft.GRPC.Server do
     Enum.any?(state.logs, &(&1.index == request.prev_log_index and &1.term == request.prev_log_term))
   end
 
+  @spec vote_reply(Raft.Server.RequestVoteParams.t(), Raft.State.t()) :: Raft.Server.RequestVoteReply.t()
+  #vote_reply process a request and a state to return a final GRPC reply
+  defp vote_reply(request, state) when state.membership_state != :follower and request.term > state.current_term do
+    Logger.debug("Lost leadership because received a request_vote with a newer term")
+
+    Raft.State.update(%{
+      membership_state: :follower,
+      current_term: request.term
+    })
+
+    Raft.Server.RequestVoteReply.new(
+      term: request.term,
+      vote_granted: false
+    )
+  end
+
+  defp vote_reply(_request, state) do
+    Raft.Server.RequestVoteReply.new(
+      term: state.current_term
+    )
+  end
+
+  @spec process_vote(Raft.Server.RequestVoteParams.t(), Raft.State.t()) :: Raft.Server.RequestVoteReply.t()
+  @doc """
+  process_vote
+    - In case that the request term is older than the state term, ignore it
+    - In case that the request term is newer than the state term, increase the state term
+  """
+  # request term is older than the state term, ignore it
+  def process_vote(request, state) when request.term < state.current_term do
+    Logger.debug("Reject vote because it's an older term - request.term(#{request.term}) < state.current_term(#{state.current_term})")
+    vote_reply(request, state)
+  end
+
+  def process_vote(request, state) when request.term >= state.current_term and
+                                         request.term == state.last_vote_term and
+                                         state.voted_for != nil and
+                                         request.candidate_id == state.voted_for do
+    Logger.debug("Duplicate request_vote for same term: #{request.term}")
+    reply = vote_reply(request, state)
+    Map.put(reply, :vote_granted, true)
+  end
+
+  def process_vote(request, state) when request.term >= state.current_term and
+                                         request.term == state.last_vote_term and
+                                         state.voted_for != nil do
+    Logger.debug("Duplicate request_vote for candidate: #{request.candidate_id}")
+    vote_reply(request, state)
+  end
+
+  def process_vote(request, state) do
+    reply = vote_reply(request, state)
+    Map.put(reply, :vote_granted, true)
+  end
+
   #######################
   # Standard Procedures #
   #######################

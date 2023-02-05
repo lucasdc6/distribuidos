@@ -9,6 +9,7 @@ defmodule Raft.State do
   defstruct current_term: 1,
             membership_state: :follower,
             voted_for: nil,
+            last_vote_term: 0,
             logs: [],
             last_index: 0,
             commit_index: 0,
@@ -48,6 +49,11 @@ defmodule Raft.State do
       {:error, err} ->
         {:error, "Error parsing state: #{inspect(err)}"}
     end
+  end
+
+  def update(state) do
+    old_state = Raft.Config.get("state")
+    Raft.Config.put("state", Map.merge(old_state, state))
   end
 
   @spec update_next_index(list, Integer.t(), any) :: list
