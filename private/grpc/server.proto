@@ -23,12 +23,19 @@ message SetMembershipParams {
   string membership_state = 1;
 }
 
+message Entry {
+  int64   index   = 1;
+  int64   term    = 2;
+  string  command = 3;
+}
+
+
 message AppendEntriesParams {
   int64          term           = 1;
   int64          leader_id      = 2;
   int64          prev_log_index = 3;
   int64          prev_log_term  = 4;
-  repeated int64 entries        = 5;
+  repeated Entry entries        = 5;
   int64          leader_commit  = 6;
 }
 
