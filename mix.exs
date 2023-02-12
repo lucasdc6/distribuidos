@@ -8,6 +8,9 @@ defmodule Distribuidos.MixProject do
       elixir: "~> 1.14",
       start_permanent: Mix.env() == :prod,
       escript: [main_module: Raft.CLI],
+      test_coverage: [
+        ignore_modules: ignore_modules()
+      ],
       deps: deps()
     ]
   end
@@ -25,6 +28,16 @@ defmodule Distribuidos.MixProject do
       {:grpc, git:  "https://github.com/elixir-grpc/grpc"},
       {:protobuf, "~> 0.11"},
       {:poison, "~> 5.0"}
+    ]
+  end
+
+  defp ignore_modules do
+    [
+      # Ignore GRPC
+      Raft.Server.GRPC.Stub,
+      Raft.Server.GRPC.Service,
+      Raft.GRPC.Endpoint,
+      Raft.Client
     ]
   end
 end
