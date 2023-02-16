@@ -15,7 +15,6 @@ defmodule Raft.State do
             commit_index: 0,
             next_index: [],
             leader_id: nil,
-            leader_addr: "",
             votes: [],
             election_timer_ref: nil,
             heartbeat_timer_ref: nil

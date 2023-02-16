@@ -12,6 +12,8 @@ defmodule RaftGrpcServerHelpersTest do
 
     state = %Raft.State{
       current_term: 1,
+      membership_state: :follower,
+      voted_for: 2,
       leader_id: 2
     }
 
@@ -21,7 +23,7 @@ defmodule RaftGrpcServerHelpersTest do
     )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote request since we have a leader (#{state.leader_id})"
+    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote request since from candidate (#{request.candidate_id}) we have a leader (#{state.leader_id})"
   end
 
   # https://github.com/hashicorp/raft/blob/main/raft.go#L1584
@@ -41,7 +43,7 @@ defmodule RaftGrpcServerHelpersTest do
     )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Reject vote because it's an older term - request.term(#{request.term}) < state.current_term(#{state.current_term})"
+    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Reject vote from candidate (#{request.candidate_id}) because it's an older term - request.term(#{request.term}) < state.current_term(#{state.current_term})"
   end
 
   # https://github.com/hashicorp/raft/blob/main/raft.go#L1589
@@ -146,7 +148,7 @@ defmodule RaftGrpcServerHelpersTest do
       vote_granted: false
     )
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote request since our last term is greater"
+    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote from candidate (#{request.candidate_id}) request since our last term is greater"
   end
 
   # https://github.com/hashicorp/raft/blob/main/raft.go#L1641
@@ -176,40 +178,19 @@ defmodule RaftGrpcServerHelpersTest do
       vote_granted: false
     )
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote request since our last index is greater"
+    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote from candidate (#{request.candidate_id}) request since our last index is greater"
   end
 
-  test "process_vote for a request term equal to last_vote_term" do
+  test "process_vote vote granted" do
     request = Raft.Server.RequestVoteParams.new(
       term: 3,
       candidate_id: 1
     )
 
     state = %Raft.State{
-      current_term: 2,
-      last_vote_term: 3,
-      voted_for: 6
-    }
-
-    reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
-      vote_granted: false
-    )
-
-    assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Duplicate request_vote for same term: #{request.term}"
-  end
-
-  test "process_vote for a request term newer than the state term and last_vote_term" do
-    request = Raft.Server.RequestVoteParams.new(
-      term: 3,
-      candidate_id: 1
-    )
-
-    state = %Raft.State{
-      current_term: 2,
-      last_vote_term: 2,
-      voted_for: 6
+      current_term: 3,
+      voted_for: 1,
+      leader_id: 1
     }
 
     reply = Raft.Server.RequestVoteReply.new(
@@ -218,5 +199,6 @@ defmodule RaftGrpcServerHelpersTest do
     )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
+    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Vote granted from candidate (#{request.candidate_id})"
   end
 end

@@ -19,7 +19,7 @@ defmodule Raft.Server do
     state = Raft.Config.get("state")
 
     if is_nil(state.heartbeat_timer_ref) do
-      Logger.info("Started timer")
+      Logger.info("Started heartbeat timer")
       Raft.Timer.set(state, :heartbeat_timer_ref, timeout)
     end
 
@@ -40,6 +40,12 @@ defmodule Raft.Server do
       })
 
     timeout = Enum.random(4000..6000)
+
+    if is_nil(state.heartbeat_timer_ref) do
+      Logger.info("Started election timer")
+      Raft.Timer.set(state, :heartbeat_timer_ref, timeout)
+    end
+
     Process.sleep(timeout)
     # On conversion to candidate, start election:
     #  * Increment currentTerm

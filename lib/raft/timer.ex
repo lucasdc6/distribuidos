@@ -13,7 +13,7 @@ defmodule Raft.Timer do
 
     if timer_ref, do: cancel(state, timer)
 
-    case :timer.apply_after(timeout, Raft.Config, :timeout, [overwrite]) do
+    case :timer.apply_after(timeout, Raft.Timer, :timeout, [overwrite]) do
       {:ok, ref} ->
         Raft.Config.put("state", Map.put(state, timer, ref))
         {:ok, ref}
