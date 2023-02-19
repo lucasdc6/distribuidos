@@ -101,6 +101,8 @@ defmodule Raft.State do
 
   def update(state) do
     old_state = Raft.Config.get("state")
-    Raft.Config.put("state", Map.merge(old_state, state))
+    new_state = Map.merge(old_state, state)
+    Raft.Config.put("state", new_state)
+    new_state
   end
 end

@@ -1,21 +1,17 @@
 defmodule Raft.Timer do
   require Logger
+  require Raft.Server
 
-  def timeout(overwrite) do
-    state = Raft.Config.get("state")
+  def set(state, timer, timeout) do
+    metadata = Raft.Config.get("metadata")
+    server_pid = Raft.Server.metadata(metadata, :pid)
 
-    Raft.Config.put("state", Map.merge(state, overwrite))
-  end
-
-  def set(state, timer, timeout \\ 5000) do
     timer_ref = Map.get(state, timer)
-    overwrite = Map.put(%{membership_state: :candidate}, timer, nil)
 
     if timer_ref, do: cancel(state, timer)
 
-    case :timer.apply_after(timeout, Raft.Timer, :timeout, [overwrite]) do
+    case :timer.apply_after(timeout, Kernel, :send, [server_pid, :timeout]) do
       {:ok, ref} ->
-        Raft.Config.put("state", Map.put(state, timer, ref))
         {:ok, ref}
       _ ->
         {:error, "Unknown error"}
@@ -23,13 +19,14 @@ defmodule Raft.Timer do
   end
 
   def cancel(state, timer) do
-    Logger.info("Cancel timer")
     timer_ref = Map.get(state, timer)
-    case :timer.cancel(timer_ref) do
-      {:ok, _} ->
-        Raft.Config.put("state", Map.put(state, timer, nil))
-      {:error, err} ->
-        Logger.error("Error canceling the timer: #{err}")
+    if timer_ref do
+      case :timer.cancel(timer_ref) do
+        {:ok, _} ->
+          Logger.info("Cancel timer")
+        {:error, err} ->
+          Logger.error("Error canceling the timer: #{err}")
+      end
     end
   end
 end

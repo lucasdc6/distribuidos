@@ -66,6 +66,19 @@ defmodule Raft.Server.AppendEntriesReply do
   field :success, 2, type: :bool
 end
 
+defmodule Raft.Server.GetStatusParams do
+  @moduledoc false
+  use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
+end
+
+defmodule Raft.Server.GetStatusReply do
+  @moduledoc false
+  use Protobuf, protoc_gen_elixir_version: "0.11.0", syntax: :proto3
+
+  field :current_term, 1, type: :int64, json_name: "currentTerm"
+  field :membership_state, 2, type: :string, json_name: "membershipState"
+end
+
 defmodule Raft.Server.GRPC.Service do
   @moduledoc false
   use GRPC.Service, name: "raft.server.GRPC", protoc_gen_elixir_version: "0.11.0"
@@ -77,6 +90,8 @@ defmodule Raft.Server.GRPC.Service do
   rpc :AppendEntries, Raft.Server.AppendEntriesParams, Raft.Server.AppendEntriesReply
 
   rpc :RunCommand, Raft.Server.RunCommandParams, Raft.Server.ResultReply
+
+  rpc :GetStatus, Raft.Server.GetStatusParams, Raft.Server.GetStatusReply
 end
 
 defmodule Raft.Server.GRPC.Stub do

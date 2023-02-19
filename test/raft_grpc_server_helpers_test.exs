@@ -3,51 +3,7 @@ defmodule RaftGrpcServerHelpersTest do
   import ExUnit.CaptureLog
   doctest Raft
 
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1575
-  test "process_vote with an elected leader" do
-    request = Raft.Server.RequestVoteParams.new(
-      term: 1,
-      candidate_id: 1
-    )
-
-    state = %Raft.State{
-      current_term: 1,
-      membership_state: :follower,
-      voted_for: 2,
-      leader_id: 2
-    }
-
-    reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
-      vote_granted: false
-    )
-
-    assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote request since from candidate (#{request.candidate_id}) we have a leader (#{state.leader_id})"
-  end
-
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1584
-  test "process_vote for a request term older than the state term" do
-    request = Raft.Server.RequestVoteParams.new(
-      term: 1,
-      candidate_id: 1
-    )
-
-    state = %Raft.State{
-      current_term: 2
-    }
-
-    reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
-      vote_granted: false
-    )
-
-    assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Reject vote from candidate (#{request.candidate_id}) because it's an older term - request.term(#{request.term}) < state.current_term(#{state.current_term})"
-  end
-
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1589
-  test "process_vote for a request term newer than the state term - lost leadership" do
+  setup do
     children = [
       {
         Raft.Config,
@@ -59,6 +15,31 @@ defmodule RaftGrpcServerHelpersTest do
     # Start process
     Supervisor.start_link(children, opts)
 
+    :ok
+  end
+
+  test "request a vote with a newer term" do
+    request = Raft.Server.RequestVoteParams.new(
+      term: 2,
+      candidate_id: 1
+    )
+
+    state = %Raft.State{
+      current_term: 1,
+      membership_state: :follower
+    }
+    Raft.Config.put("state", state)
+
+    reply = Raft.Server.RequestVoteReply.new(
+      term: request.term,
+      vote_granted: true
+    )
+
+    assert reply == Raft.GRPC.Server.process_vote(request, state)
+    assert %Raft.State{state | voted_for: 1, current_term: 2} == Raft.Config.get("state")
+  end
+
+  test "request a vote with a newer term to an elected leader" do
     request = Raft.Server.RequestVoteParams.new(
       term: 2,
       candidate_id: 1
@@ -76,129 +57,141 @@ defmodule RaftGrpcServerHelpersTest do
     )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Lost leadership because received a request_vote with a newer term"
+    assert %Raft.State{state | voted_for: 1, current_term: 2, membership_state: :follower} == Raft.Config.get("state")
   end
 
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1623
-  test "process_vote for a duplicate request for the same term" do
+  test "request a vote with the same term and without an elected leader" do
     request = Raft.Server.RequestVoteParams.new(
-      term: 3,
+      term: 1,
       candidate_id: 1
     )
 
     state = %Raft.State{
-      current_term: 2,
-      last_vote_term: 3,
-      voted_for: 2
+      current_term: 1,
+      membership_state: :follower
     }
+    Raft.Config.put("state", state)
 
     reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
-      vote_granted: false
-    )
-
-    assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Duplicate request_vote for same term: #{request.term}"
-  end
-
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1625
-  test "process_vote for a duplicate request for the same term and candidate" do
-    request = Raft.Server.RequestVoteParams.new(
-      term: 3,
-      candidate_id: 1
-    )
-
-    state = %Raft.State{
-      current_term: 2,
-      last_vote_term: 3,
-      voted_for: 1
-    }
-
-    reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
+      term: request.term,
       vote_granted: true
     )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Duplicate request_vote for candidate: #{request.candidate_id}"
+    assert %Raft.State{state | voted_for: 1, current_term: 1} == Raft.Config.get("state")
   end
 
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1633
-  test "process_vote for a request last_log_term older than state last log term" do
+  test "request a vote with the same term and with an elected leader" do
     request = Raft.Server.RequestVoteParams.new(
-      term: 4,
+      term: 1,
+      candidate_id: 1
+    )
+
+    state = %Raft.State{
+      current_term: 1,
+      membership_state: :follower,
+      voted_for: 2
+    }
+    Raft.Config.put("state", state)
+
+    reply = Raft.Server.RequestVoteReply.new(
+      term: request.term,
+      vote_granted: false
+    )
+
+    assert reply == Raft.GRPC.Server.process_vote(request, state)
+    assert state == Raft.Config.get("state")
+  end
+
+  test "request a vote from the elected leader with the same term" do
+    request = Raft.Server.RequestVoteParams.new(
+      term: 1,
+      candidate_id: 1
+    )
+
+    state = %Raft.State{
+      current_term: 1,
+      membership_state: :follower,
+      voted_for: 1
+    }
+    Raft.Config.put("state", state)
+
+    reply = Raft.Server.RequestVoteReply.new(
+      term: request.term,
+      vote_granted: true
+    )
+
+    assert reply == Raft.GRPC.Server.process_vote(request, state)
+    assert state == Raft.Config.get("state")
+  end
+
+  test "request a vote from the elected leader with a newer term" do
+    request = Raft.Server.RequestVoteParams.new(
+      term: 2,
+      candidate_id: 1
+    )
+
+    state = %Raft.State{
+      current_term: 1,
+      membership_state: :follower,
+      voted_for: 1
+    }
+    Raft.Config.put("state", state)
+
+    reply = Raft.Server.RequestVoteReply.new(
+      term: request.term,
+      vote_granted: true
+    )
+
+    assert reply == Raft.GRPC.Server.process_vote(request, state)
+    assert %Raft.State{state | current_term: 2} == Raft.Config.get("state")
+  end
+
+  test "request a vote with an older log index" do
+    request = Raft.Server.RequestVoteParams.new(
+      term: 3,
       candidate_id: 1,
-      last_log_index: 2,
+      last_log_index: 1,
       last_log_term: 2
     )
 
     state = %Raft.State{
       current_term: 3,
-      last_vote_term: 3,
-      logs: [
-        %{index: 1, term: 1, command: 1},
-        %{index: 3, term: 4, command: 1},
-        %{index: 2, term: 2, command: 1}
-      ],
-      voted_for: 1
+      membership_state: :follower,
+      logs: [%{index: 1, value: 1, term: 1}, %{index: 2, value: 1, term: 3}]
     }
+    Raft.Config.put("state", state)
 
     reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
+      term: request.term,
       vote_granted: false
     )
+
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote from candidate (#{request.candidate_id}) request since our last term is greater"
+    assert state == Raft.Config.get("state")
   end
 
-  # https://github.com/hashicorp/raft/blob/main/raft.go#L1641
-  test "process_vote for a request last_log_index older than state last log index" do
+  test "request a vote with an older log term" do
     request = Raft.Server.RequestVoteParams.new(
-      term: 4,
+      term: 2,
       candidate_id: 1,
-      last_log_index: 4,
-      last_log_term: 4
+      last_log_index: 1,
+      last_log_term: 1
     )
 
     state = %Raft.State{
-      current_term: 3,
-      last_vote_term: 3,
-      logs: [
-        %{index: 1, term: 1, command: 1},
-        %{index: 3, term: 4, command: 1},
-        %{index: 2, term: 2, command: 1},
-        %{index: 4, term: 4, command: 1},
-        %{index: 5, term: 4, command: 1}
-      ],
-      voted_for: 1
+      current_term: 1,
+      membership_state: :follower,
+      logs: [%{index: 1, value: 1, term: 1}, %{index: 2, value: 1, term: 1}]
     }
+    Raft.Config.put("state", state)
 
     reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
+      term: request.term,
       vote_granted: false
     )
-    assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Rejecting vote from candidate (#{request.candidate_id}) request since our last index is greater"
-  end
-
-  test "process_vote vote granted" do
-    request = Raft.Server.RequestVoteParams.new(
-      term: 3,
-      candidate_id: 1
-    )
-
-    state = %Raft.State{
-      current_term: 3,
-      voted_for: 1,
-      leader_id: 1
-    }
-
-    reply = Raft.Server.RequestVoteReply.new(
-      term: state.current_term,
-      vote_granted: true
-    )
 
     assert reply == Raft.GRPC.Server.process_vote(request, state)
-    assert capture_log(fn -> Raft.GRPC.Server.process_vote(request, state) end) =~ "Vote granted from candidate (#{request.candidate_id})"
+    assert state == Raft.Config.get("state")
   end
 end

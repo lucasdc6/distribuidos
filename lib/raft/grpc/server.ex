@@ -43,28 +43,6 @@ defmodule Raft.GRPC.Server do
     end
   end
 
-  @spec vote_reply(Raft.Server.RequestVoteParams.t(), Raft.State.t()) :: Raft.Server.RequestVoteReply.t()
-  #vote_reply process a request and a state to return a final GRPC reply
-  defp vote_reply(request, state) when state.membership_state != :follower and request.term > state.current_term do
-    Logger.debug("Lost leadership because received a request_vote with a newer term")
-
-    Raft.State.update(%{
-      membership_state: :follower,
-      current_term: request.term
-    })
-
-    Raft.Server.RequestVoteReply.new(
-      term: request.term,
-      vote_granted: false
-    )
-  end
-
-  defp vote_reply(_request, state) do
-    Raft.Server.RequestVoteReply.new(
-      term: state.current_term
-    )
-  end
-
   @spec process_vote(Raft.Server.RequestVoteParams.t(), Raft.State.t()) :: Raft.Server.RequestVoteReply.t()
   @doc """
   process_vote
@@ -72,51 +50,57 @@ defmodule Raft.GRPC.Server do
     - In case that the request term is newer than the state term, increase the state term
   """
   #
-  def process_vote(request, state) when not is_nil(state.leader_id) and
-                                        request.candidate_id != state.leader_id do
-    Logger.warn("Rejecting vote request since from candidate (#{request.candidate_id}) we have a leader (#{state.leader_id})")
-    vote_reply(request, state)
-  end
-
-  # request term is older than the state term, ignore it
-  def process_vote(request, state) when request.term < state.current_term do
-    Logger.debug("Reject vote from candidate (#{request.candidate_id}) because it's an older term - request.term(#{request.term}) < state.current_term(#{state.current_term})")
-    vote_reply(request, state)
-  end
-
-  def process_vote(request, state) when request.term >= state.current_term and
-                                        request.term == state.last_vote_term and
-                                        state.voted_for != nil and
-                                        request.candidate_id == state.voted_for do
-    Logger.debug("Duplicate request_vote for candidate: #{request.candidate_id}")
-    reply = vote_reply(request, state)
-    Map.put(reply, :vote_granted, true)
-  end
-
-  def process_vote(request, state) when request.term >= state.current_term and
-                                        request.term == state.last_vote_term and
-                                        state.voted_for != nil do
-    Logger.debug("Duplicate request_vote for same term: #{request.term}")
-    vote_reply(request, state)
-  end
-
   def process_vote(request, state) do
     %{index: last_index, term: last_term} = Raft.State.get_last_log(state)
-    reply = vote_reply(request, state)
 
-    reply = cond do
-      request.last_log_term < last_term ->
-        Logger.debug("Rejecting vote from candidate (#{request.candidate_id}) request since our last term is greater")
-        reply
-      request.last_log_term == last_term and request.last_log_index < last_index ->
-        Logger.debug("Rejecting vote from candidate (#{request.candidate_id}) request since our last index is greater")
-        reply
+    up_to_date = request.last_log_term > last_term or
+                 (request.last_log_term == last_term and request.last_log_index >= last_index)
+
+    cond do
+      request.term > state.current_term && up_to_date ->
+        Logger.debug("Granted vote from #{}")
+        Raft.State.update(%{
+          voted_for: request.candidate_id,
+          current_term: request.term,
+          membership_state: :follower
+        })
+        Raft.Server.RequestVoteReply.new(
+          vote_granted: true,
+          term: request.term
+        )
+      request.term == state.current_term && up_to_date ->
+        if not is_nil(state.voted_for) and request.candidate_id != state.voted_for do
+          Raft.Server.RequestVoteReply.new(
+            vote_granted: false,
+            term: request.term
+          )
+        else
+          Raft.State.update(%{
+            voted_for: request.candidate_id,
+            current_term: request.term,
+            membership_state: :follower
+          })
+          Raft.Server.RequestVoteReply.new(
+            vote_granted: true,
+            term: request.term
+          )
+        end
+      request.candidate_id == state.voted_for ->
+        Raft.State.update(%{
+          voted_for: request.candidate_id,
+          current_term: request.term,
+          membership_state: :follower
+        })
+        Raft.Server.RequestVoteReply.new(
+          vote_granted: true,
+          term: request.term
+        )
       true ->
-        Logger.debug("Vote granted from candidate (#{request.candidate_id})")
-        Map.put(reply, :vote_granted, true)
+        Raft.Server.RequestVoteReply.new(
+          vote_granted: false,
+          term: request.term
+      )
     end
-
-    reply
   end
 
   #######################
@@ -126,26 +110,29 @@ defmodule Raft.GRPC.Server do
         :: Raft.Server.RequestVoteReply.t()
   def request_vote(request, _stream) do
     state = Raft.Config.get("state")
-
+    metadata = Raft.Config.get("metadata")
+    server_pid = Raft.Server.metadata(metadata, :pid)
     reply = process_vote(request, state)
+
     if reply.vote_granted do
-      Raft.State.update(%{
-        voted_for: request.candidate_id
-      })
+      Logger.debug("Send :reset to #{inspect(server_pid)}")
+      send(server_pid, :reset)
     end
+
     reply
   end
 
   def append_entries(request, _stream) do
     state = Raft.Config.get("state")
+    metadata = Raft.Config.get("metadata")
+    server_pid = Raft.Server.metadata(metadata, :pid)
     Logger.debug("Current state: #{inspect(state)}")
     success = check_entries(state, request)
 
     if success do
       old_logs = Enum.filter(state.logs, fn log -> log.index < request.prev_log_index + 1 end)
       new_logs = old_logs ++ request.entries
-      Raft.Config.put("state", %Raft.State{
-        state |
+      Raft.State.update(%{
         logs: old_logs ++ request.entries,
         last_applied: length(new_logs),
         leader_id: request.leader_id,
@@ -155,8 +142,8 @@ defmodule Raft.GRPC.Server do
       })
     end
 
-    Raft.Timer.set(state, :heartbeat_timer_ref)
-
+    Logger.debug("Send :reset to #{inspect(server_pid)}")
+    send(server_pid, :reset)
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
@@ -185,7 +172,7 @@ defmodule Raft.GRPC.Server do
     # * append entry to local log
     # * respond after entry applied to state machine - TODO
     if state.membership_state == :leader do
-      Raft.Config.put("state", %Raft.State{
+      Raft.State.update(%{
         state |
         last_applied: index,
         logs: state.logs ++ [%{index: index, term: state.current_term, command: inspect(request.command)}]
@@ -203,11 +190,23 @@ defmodule Raft.GRPC.Server do
     valid_membership_state = request.membership_state in ["follower", "candidate", "leader", "shutdown"]
 
     if valid_membership_state do
-      Raft.Config.put("state", %Raft.State{current_term: state.current_term, membership_state: String.to_atom(request.membership_state)})
+      Raft.State.update(%{
+        current_term: state.current_term,
+        membership_state: String.to_atom(request.membership_state)
+      })
     end
 
     Raft.Server.ResultReply.new(
       result: valid_membership_state
+    )
+  end
+
+  def get_status(_request, _stream) do
+    state = Raft.Config.get("state")
+
+    Raft.Server.GetStatusReply.new(
+      current_term: state.current_term,
+      membership_state: Atom.to_string(state.membership_state)
     )
   end
 end

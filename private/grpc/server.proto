@@ -6,6 +6,7 @@ service GRPC {
   rpc SetMembership (SetMembershipParams) returns (ResultReply);
   rpc AppendEntries(AppendEntriesParams) returns (AppendEntriesReply);
   rpc RunCommand(RunCommandParams) returns (ResultReply);
+  rpc GetStatus(GetStatusParams) returns(GetStatusReply);
 }
 
 message RequestVoteParams {
@@ -51,4 +52,11 @@ message ResultReply {
 message AppendEntriesReply {
   int64 term    = 1;
   bool  success = 2;
+}
+
+message GetStatusParams {}
+
+message GetStatusReply {
+  int64 current_term      = 1;
+  string membership_state = 2;
 }
