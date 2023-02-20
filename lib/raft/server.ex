@@ -14,27 +14,27 @@ defmodule Raft.Server do
   Run the main Raft process
   """
   def run(state = %{membership_state: :follower}) do
-    timeout = Enum.random(1000..5000)
+    timeout = Enum.random(3000..5000)
     Logger.debug("Node in #{state.membership_state} mode")
     state = Raft.Config.get("state")
 
     if is_nil(state.heartbeat_timer_ref) do
-      Logger.info("Started heartbeat timer")
+      Logger.debug("Started heartbeat timer")
       Raft.Timer.set(state, :heartbeat_timer_ref, timeout)
     end
 
     Logger.debug("state: #{inspect(state)}, timeout: #{timeout}")
 
     receive do
-      :reset ->
+      :heartbeat_timer_reset ->
         Logger.debug("Receive :reset")
         Raft.Timer.cancel(state, :heartbeat_timer_ref)
         state = Raft.State.update(%{
           heartbeat_timer_ref: nil
         })
         run(state)
-      :timeout ->
-        Logger.debug("Heartbeat timeout reached, starting election")
+      :heartbeat_timer_timeout ->
+        Logger.warn("Heartbeat timeout reached, starting election")
         state = Raft.State.update(%{
           membership_state: :candidate,
           heartbeat_timer_ref: nil
@@ -46,12 +46,12 @@ defmodule Raft.Server do
   def run(state = %{membership_state: :candidate}) do
     Logger.debug("Node in #{state.membership_state} mode")
     metadata = Raft.Config.get("metadata")
-    timeout = Enum.random(1000..5000)
+    timeout = Enum.random(3000..5000)
 
     # On conversion to candidate, start election:
     #  * Reset election timer
     if is_nil(state.election_timer_ref) do
-      Logger.info("Started election timer")
+      Logger.debug("Started election timer")
       Raft.Timer.set(state, :election_timer_ref, timeout)
     end
 
@@ -90,7 +90,7 @@ defmodule Raft.Server do
 
     try do
       for response <- responses do
-        Logger.info("Request vote to server #{response.peer}")
+        Logger.debug("Request vote to server #{response.peer}")
         state = Raft.Config.get("state")
         votes_denied = 0
 
@@ -110,7 +110,7 @@ defmodule Raft.Server do
                   votes: [response.peer] ++ state.votes
                 }
                 Raft.State.update(new_state)
-                Logger.info("Vote granted from #{response.peer}")
+                Logger.debug("Vote granted from #{response.peer}")
                 Logger.info("Vote count: #{length(new_state.votes)} - #{inspect(new_state.votes)}")
 
                 if votes_needed <= length(new_state.votes) do
@@ -138,6 +138,12 @@ defmodule Raft.Server do
     catch
       %{code: :fallback, term: term} ->
         Logger.notice("Newer term discovered: #{term}")
+        state = Raft.State.update(%{
+          membership_state: :follower,
+          votes: []
+        })
+        Raft.Timer.cancel(state, :election_timer_ref)
+        run(state)
       %{code: :elected} ->
         Logger.notice("Election won with term #{state.current_term}")
         state = Raft.State.update(%{
@@ -146,7 +152,7 @@ defmodule Raft.Server do
         Raft.Timer.cancel(state, :election_timer_ref)
         run(state)
       %{code: :denied}
-        Logger.notice("Election denied")
+        Logger.info("Election denied")
         state = Raft.State.update(%{
           membership_state: :follower,
           votes: []
@@ -158,7 +164,15 @@ defmodule Raft.Server do
     end
 
     receive do
-      :timeout ->
+      :election_timer_reset ->
+        Logger.warn("Fallback ")
+        Raft.Timer.cancel(state, :election_timer_ref)
+        state = Raft.State.update(%{
+          membership_state: :follower,
+          votes: []
+        })
+        run(state)
+      :election_timer_timeout ->
         Logger.warn("Election timeout reached, restarting election")
         state = Raft.State.update(%{
           membership_state: :candidate,
@@ -198,7 +212,7 @@ defmodule Raft.Server do
 
       case response.append_reply do
         {:ok, %{success: true}} ->
-          Logger.info("Successful append entries from #{response.peer}")
+          Logger.debug("Successful append entries from #{response.peer}")
           last_log = Raft.State.find_log(state.logs, state.current_term, state.last_applied)
           next_index = Raft.State.update_next_index(state, response.peer, state.last_applied, last_log.term)
 
@@ -207,16 +221,16 @@ defmodule Raft.Server do
           })
 
         {:ok, %{success: false, term: reply_term}} ->
-          Logger.info("Unsuccessful append entries from #{response.peer}")
+          Logger.debug("Unsuccessful append entries from #{response.peer}")
           follower_info = Raft.State.get_follower_data(state, response.peer)
           cond do
             reply_term > state.current_term ->
-              Logger.info("Newer term discovered: #{reply_term}")
+              Logger.debug("Newer term discovered: #{reply_term}")
               Raft.State.update(%{
                 membership_state: :follower
               })
             follower_info.index > 0 ->
-              Logger.info("Decrement follower index for next heartbeat")
+              Logger.debug("Decrement follower index for next heartbeat")
 
               decremented_index = follower_info.index - 1
               prev_log = Raft.State.find_log(state.logs, state.current_term, decremented_index)
@@ -232,11 +246,11 @@ defmodule Raft.Server do
               })
 
             true ->
-              Logger.error("Error")
+              Logger.error("Unknown error")
           end
 
         {_, err} ->
-          Logger.error("Error applying entry #{response.request}- peer #{response.peer}: #{err}")
+          Logger.error("Error applying entry #{inspect(response.request)} - peer #{response.peer}: #{inspect(err)}")
       end
     end
 

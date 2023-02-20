@@ -12,7 +12,7 @@ defmodule Raft.GRPC.Server do
   ```
   """
   def connect(peer, retry_time, retry_wait_time) do
-    Logger.notice("Connecting to peer #{peer}")
+    Logger.debug("Connecting to peer #{peer}")
     case GRPC.Stub.connect(peer) do
       {:ok, channel} ->
         Logger.notice("Connected with peer #{peer}")
@@ -58,7 +58,7 @@ defmodule Raft.GRPC.Server do
 
     cond do
       request.term > state.current_term && up_to_date ->
-        Logger.debug("Granted vote from #{}")
+        Logger.debug("Granted vote to #{request.candidate_id}")
         Raft.State.update(%{
           voted_for: request.candidate_id,
           current_term: request.term,
@@ -70,11 +70,13 @@ defmodule Raft.GRPC.Server do
         )
       request.term == state.current_term && up_to_date ->
         if not is_nil(state.voted_for) and request.candidate_id != state.voted_for do
+          Logger.debug("Denied vote to #{request.candidate_id} - request term (#{request.term}) equals to current term (#{state.current_term})")
           Raft.Server.RequestVoteReply.new(
             vote_granted: false,
             term: request.term
           )
         else
+          Logger.debug("Granted vote to #{request.candidate_id}")
           Raft.State.update(%{
             voted_for: request.candidate_id,
             current_term: request.term,
@@ -86,6 +88,8 @@ defmodule Raft.GRPC.Server do
           )
         end
       request.candidate_id == state.voted_for ->
+        Logger.warn("Granted vote to same leader - voted_for (#{state.voted_for}) == request candidate_id (#{request.candidate_id})")
+
         Raft.State.update(%{
           voted_for: request.candidate_id,
           current_term: request.term,
@@ -96,6 +100,8 @@ defmodule Raft.GRPC.Server do
           term: request.term
         )
       true ->
+        Logger.debug("Denied vote to #{request.candidate_id}")
+
         Raft.Server.RequestVoteReply.new(
           vote_granted: false,
           term: request.term
@@ -116,7 +122,7 @@ defmodule Raft.GRPC.Server do
 
     if reply.vote_granted do
       Logger.debug("Send :reset to #{inspect(server_pid)}")
-      send(server_pid, :reset)
+      send(server_pid, :heartbeat_timer_reset)
     end
 
     reply
@@ -126,6 +132,7 @@ defmodule Raft.GRPC.Server do
     state = Raft.Config.get("state")
     metadata = Raft.Config.get("metadata")
     server_pid = Raft.Server.metadata(metadata, :pid)
+    Logger.info("append_entries invoked from leader #{request.leader_id}")
     Logger.debug("Current state: #{inspect(state)}")
     success = check_entries(state, request)
 
@@ -136,14 +143,14 @@ defmodule Raft.GRPC.Server do
         logs: old_logs ++ request.entries,
         last_applied: length(new_logs),
         leader_id: request.leader_id,
-        voted_for: nil,
+        #voted_for: nil,
         membership_state: keep_or_change(state.membership_state),
         current_term: update_term(state.current_term, request.term)
       })
     end
 
     Logger.debug("Send :reset to #{inspect(server_pid)}")
-    send(server_pid, :reset)
+    send(server_pid, :election_timer_reset)
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
