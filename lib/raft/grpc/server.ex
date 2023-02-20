@@ -122,7 +122,7 @@ defmodule Raft.GRPC.Server do
 
     if reply.vote_granted do
       Logger.debug("Send :reset to #{inspect(server_pid)}")
-      send(server_pid, :heartbeat_timer_reset)
+      send(server_pid, :election_timer_reset)
     end
 
     reply
@@ -137,9 +137,10 @@ defmodule Raft.GRPC.Server do
     success = check_entries(state, request)
 
     if success do
+      Logger.notice("Successful append entries from leader #{request.leader_id}")
       old_logs = Enum.filter(state.logs, fn log -> log.index < request.prev_log_index + 1 end)
       new_logs = old_logs ++ request.entries
-      Raft.State.update(%{
+      state = Raft.State.update(%{
         logs: old_logs ++ request.entries,
         last_applied: length(new_logs),
         leader_id: request.leader_id,
@@ -147,10 +148,10 @@ defmodule Raft.GRPC.Server do
         membership_state: keep_or_change(state.membership_state),
         current_term: update_term(state.current_term, request.term)
       })
+      Logger.notice("Send :reset to #{inspect(server_pid)}")
+      send(server_pid, :heartbeat_timer_reset)
     end
 
-    Logger.debug("Send :reset to #{inspect(server_pid)}")
-    send(server_pid, :election_timer_reset)
     Raft.Server.AppendEntriesReply.new(
       term: state.current_term,
       success: success
