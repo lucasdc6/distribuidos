@@ -1,6 +1,11 @@
 all:
+  vars:
+    docker_users:
+      - ubuntu
   hosts:
+    
     distribuidos-01:
-      ansible_host: 3.235.188.235
-      ip: 3.235.188.235
+      ansible_host: 44.200.64.246
+      ip: 44.200.64.246
       ansible_user: ubuntu
+    
