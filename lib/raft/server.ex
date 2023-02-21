@@ -14,9 +14,9 @@ defmodule Raft.Server do
   Run the main Raft process
   """
   def run(state = %{membership_state: :follower}) do
-    timeout = Enum.random(2000..6000)
+    timeout = Enum.random(500..1000)
     Logger.debug("Node in #{state.membership_state} mode")
-    Process.sleep(2500)
+    Process.sleep(500)
     state = Raft.Config.get("state")
 
     if is_nil(state.heartbeat_timer_ref) do
@@ -28,7 +28,7 @@ defmodule Raft.Server do
 
     receive do
       :heartbeat_timer_reset ->
-        Logger.notice("Receive a heartbeat from the leader #{state.leader_id}")
+        Logger.info("Receive a heartbeat from the leader #{state.leader_id}")
         Raft.Timer.cancel(state, :heartbeat_timer_ref)
         state = Raft.State.update(%{
           heartbeat_timer_ref: nil
@@ -46,9 +46,9 @@ defmodule Raft.Server do
 
   def run(state = %{membership_state: :candidate}) do
     Logger.debug("Node in #{state.membership_state} mode")
-    Process.sleep(2500)
+    Process.sleep(500)
     metadata = Raft.Config.get("metadata")
-    timeout = Enum.random(2000..6000)
+    timeout = Enum.random(500..1000)
 
     # On conversion to candidate, start election:
     #  * Reset election timer
@@ -192,9 +192,9 @@ defmodule Raft.Server do
   end
 
   def run(state = %{membership_state: :leader}) do
-    # timeout = Enum.random(2000..6000)
+    # timeout = Enum.random(500..1000)
     Logger.debug("Node in #{state.membership_state} mode")
-    Process.sleep(2500)
+    Process.sleep(500)
 
     peers = Raft.Config.get("peers")
     metadata = Raft.Config.get("metadata")
@@ -222,7 +222,7 @@ defmodule Raft.Server do
 
       case response.append_reply do
         {:ok, %{success: true}} ->
-          Logger.notice("Successful append entries from #{response.peer}")
+          Logger.info("Successful append entries from #{response.peer}")
           last_log = Raft.State.find_log(state.logs, state.current_term, state.last_applied)
           next_index = Raft.State.update_next_index(state, response.peer, state.last_applied, last_log.term)
 
