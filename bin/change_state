@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+
+SERVER_ID=${1?-You must specify the server id}
+STATE=${2:-follower}
+
+grpcurl -plaintext -proto private/grpc/server.proto -d "{\"membership_state\": \"${STATE}\"}" "localhost:5005${SERVER_ID}" raft.server.GRPC.SetMembership
