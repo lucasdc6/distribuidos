@@ -6,7 +6,8 @@ COPY ./mix.* ./
 RUN apk add make git &&\
     mix local.hex --force &&\
     mix local.rebar --force &&\
-    mix deps.get
+    mix deps.get &&\
+    mix deps.compile
 
 COPY . .
 

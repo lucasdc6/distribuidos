@@ -9,10 +9,12 @@ defmodule Raft.State do
   defstruct current_term: 1,
             membership_state: :follower,
             voted_for: nil,
+            last_vote_term: 0,
             logs: [],
             last_applied: 0,
             commit_index: 0,
             next_index: [],
+            leader_id: nil,
             votes: [],
             election_timer_ref: nil,
             heartbeat_timer_ref: nil
@@ -76,6 +78,12 @@ defmodule Raft.State do
     )
   end
 
+  def get_last_log(state) do
+    state.logs
+      |> Enum.sort(fn l1, l2 -> l1.term > l2.term end)
+      |> Enum.at(0, %{index: 0, term: 0})
+  end
+
   def initialize_next_index_for_leader(state, peers) do
     Enum.map(
       peers,
@@ -89,5 +97,12 @@ defmodule Raft.State do
 
   def find_log(logs, default_term, index) do
     Enum.find(logs, %{term: default_term}, fn log -> log.index == index end)
+  end
+
+  def update(state) do
+    old_state = Raft.Config.get("state")
+    new_state = Map.merge(old_state, state)
+    Raft.Config.put("state", new_state)
+    new_state
   end
 end

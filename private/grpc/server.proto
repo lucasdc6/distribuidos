@@ -6,17 +6,19 @@ service GRPC {
   rpc SetMembership (SetMembershipParams) returns (ResultReply);
   rpc AppendEntries(AppendEntriesParams) returns (AppendEntriesReply);
   rpc RunCommand(RunCommandParams) returns (ResultReply);
+  rpc GetStatus(GetStatusParams) returns(GetStatusReply);
 }
 
 message RequestVoteParams {
   int64 term            = 1;
   int64 candidate_id    = 2;
   int64 last_log_index  = 3;
+  int64 last_log_term   = 4;
 }
 
 message RequestVoteReply {
   int64 term          = 1;
-  bool vote_granted   = 2;
+  bool  vote_granted  = 2;
 }
 
 message SetMembershipParams {
@@ -48,6 +50,13 @@ message ResultReply {
 }
 
 message AppendEntriesReply {
-  int64 term   = 1;
-  bool success = 2;
+  int64 term    = 1;
+  bool  success = 2;
+}
+
+message GetStatusParams {}
+
+message GetStatusReply {
+  int64 current_term      = 1;
+  string membership_state = 2;
 }
