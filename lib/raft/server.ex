@@ -60,20 +60,20 @@ defmodule Raft.Server do
     # On conversion to candidate, start election:
     #  * Increment currentTerm
     #  * Vote for self
-    Raft.State.update(%{
+    new_state = Raft.State.update(%{
       current_term: state.current_term + 1,
       votes: [metadata(metadata, :id)],
       voted_for: metadata(metadata, :id)
-      })
+    })
 
     peers = Raft.Config.get("peers")
     votes_needed = ceil(length(peers) / 2 + 1)
-    %{term: last_term} = Raft.State.get_last_log(state)
+    %{term: last_term} = Raft.State.get_last_log(new_state)
     Logger.info("Votes needed for the quorum: #{votes_needed}")
 
     request = Raft.Server.RequestVoteParams.new(
-      term: state.current_term,
-      last_log_index: state.last_applied,
+      term: new_state.current_term,
+      last_log_index: new_state.last_applied,
       last_log_term: last_term,
       candidate_id: metadata(metadata, :id)
     )
