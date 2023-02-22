@@ -50,7 +50,7 @@ resource "aws_security_group" "grpc" {
     from_port        = 50051
     to_port          = 50051
     protocol         = "tcp"
-    cidr_blocks      = var.ip_ingress_ips
+    cidr_blocks      = ["0.0.0.0/0"]
   }
 
   tags = {

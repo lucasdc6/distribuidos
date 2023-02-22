@@ -71,3 +71,7 @@ Finalmente, solo hace falta ejecutar ansible con el playbook `playbooks/install.
 ```bash
 ansible-playbook -i hosts.yaml playbooks/install.yaml
 ```
+
+### Agregar claves ssh extra
+
+Para agregar claves ssh autorizadas a las instancias desplegadas, se pueden agregar las **claves publicas** al directorio `ansible/authorized_keys`. Éstas van a ser agregadas automáticamente a todas las instancias y no van a ser subidas al repositorio

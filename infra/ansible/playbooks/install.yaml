@@ -1,6 +1,14 @@
 - hosts: all
   gather_facts: no
   tasks:
+    - name: Configure authorized_keys
+      ansible.builtin.include_tasks:
+        file: "{{ inventory_dir }}/tasks/ssh.yaml"
+        apply:
+          tags:
+            - configure
+      tags:
+        - configure
     - name: Include docker role
       ansible.builtin.include_role:
         name: geerlingguy.docker

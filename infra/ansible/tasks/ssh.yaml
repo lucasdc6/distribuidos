@@ -1,0 +1,8 @@
+- name: Add authorized_keys
+  ansible.posix.authorized_key:
+    user: ubuntu
+    state: present
+    key: "{{ lookup('file', '{{ item.src }}') }}"
+  loop: "{{ lookup('community.general.filetree', '{{ inventory_dir }}/authorized_keys', wantlist=True) }}"
+  loop_control:
+    label: "{{ item.path }}"

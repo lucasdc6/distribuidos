@@ -34,3 +34,4 @@ tools
 infra/.direnv
 hosts.yaml
 credentials.yaml
+authorized_keys
