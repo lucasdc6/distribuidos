@@ -31,8 +31,8 @@ function get_state_aws() {
 }
 
 while true; do
-    echo "State";
-    "get_state_${SOURCE}"
-    echo "==============================="
-    sleep 1
+  echo "State at $(date +%H:%M:%S)"
+  "get_state_${SOURCE}"
+  echo "==============================="
+  sleep 1
 done
