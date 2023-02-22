@@ -55,8 +55,19 @@ pip install -r requirements.txt
 ansible-galaxy install -r requirements.yaml
 ```
 
-Finalmente, solo hace falta ejecutar ansible con el playbook `playbook.yaml`
+Ahora debemos configurar las credenciales para acceder a la registry de `ghcr`, para esto, se puede crear un [PERSONAL ACCESS TOKEN](https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/creating-a-personal-access-token), el cual solo require permisos `read:packages` para interactuar con la registry.
 
 ```bash
-ansible-playbook -i hosts.yaml playbook.yaml
+cat <<CREDS > credentials.yaml
+registry_username: GITHUB_USERNAME
+registry_password: GITHUB_PERSONAL_ACCESS_TOKEN
+CREDS
+```
+
+_Notar que este archivo se encuentra en el gitignore, por lo que no corremos peligro de subirlo al repositrorio. De todas formas, se recomienda configurar una fecha de expiración_
+
+Finalmente, solo hace falta ejecutar ansible con el playbook `playbooks/install.yaml`
+
+```bash
+ansible-playbook -i hosts.yaml playbooks/install.yaml
 ```
