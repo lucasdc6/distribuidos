@@ -30,3 +30,6 @@ distribuidos
 
 # Ignore tools directory
 tools
+
+infra/.direnv
+hosts.yaml

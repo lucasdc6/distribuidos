@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+while true; do
+    echo "State";
+    for i in {1..5}; do
+        grpcurl -plaintext -proto private/grpc/server.proto localhost:5005$i raft.server.GRPC.GetStatus
+    done;
+    echo "==============================="
+    sleep 1
+done
