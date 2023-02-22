@@ -1,0 +1,27 @@
+- name: Log into ghcr
+  community.docker.docker_login:
+    registry_url: "ghcr.io"
+    username: "{{ registry_username }}"
+    password: "{{ registry_password }}"
+  tags:
+    - login
+- name: Get ips from other hosts
+  set_fact:
+    host_ips: "{{ groups.all | difference([inventory_hostname]) | map('extract', hostvars, ['ansible_host'])}}"
+- name: Calculate peer args
+  set_fact:
+    peer_args: "{{ ['--peer='] | product(host_ips) | map('join') | list | product([':50051']) | map('join') | list }}"
+- name: Deployment arguments
+  debug:
+    msg:
+      - "Start container with the following args:"
+      - "{{ peer_args + ['-v=debug'] }}"
+- name: Run raft server
+  community.docker.docker_container:
+    name: distribuidos
+    image: ghcr.io/lucasdc6/distribuidos:latest
+    ports:
+      - 50051:50051
+    command: "{{ peer_args + ['-v=debug'] }}"
+  tags:
+    - run

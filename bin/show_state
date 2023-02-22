@@ -1,10 +1,38 @@
 #!/usr/bin/env bash
 
+SOURCE=${1:-local}
+
+if [ "$SOURCE" != "aws" ] && [ "$SOURCE" != "local" ]; then
+  echo "Invalid option"
+  echo "Choose one of"
+  echo -e "\t * 'local': local deployment with docker-compose. Default option"
+  echo -e "\t * 'aws': deployment with terraform+ansible"
+  exit 1
+fi
+
+function get_state_local() {
+  local server_host
+  for i in {1..5}; do
+    server_host="localhost:5005${i}"
+    echo "Server: ${server_host}"
+    grpcurl -plaintext -proto private/grpc/server.proto "${server_host}" raft.server.GRPC.GetStatus
+  done;
+}
+
+function get_state_aws() {
+  local tf_output
+  local server_host
+  tf_output=$(cd infra/terraform && terraform output -json)
+  for ip in $(echo "$tf_output" | jq -rc ".public_ips.value[]"); do
+    server_host="${ip}:50051"
+    echo "Server: ${server_host}"
+    grpcurl -plaintext -proto private/grpc/server.proto "${ip}:50051" raft.server.GRPC.GetStatus
+  done
+}
+
 while true; do
     echo "State";
-    for i in {1..5}; do
-        grpcurl -plaintext -proto private/grpc/server.proto localhost:5005$i raft.server.GRPC.GetStatus
-    done;
+    "get_state_${SOURCE}"
     echo "==============================="
     sleep 1
 done

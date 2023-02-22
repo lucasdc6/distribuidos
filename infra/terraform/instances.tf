@@ -40,6 +40,24 @@ resource "aws_security_group" "ssh" {
   }
 }
 
+resource "aws_security_group" "grpc" {
+  name        = "allow_grpc"
+  description = "Allow GRPC inbound traffic"
+  vpc_id      = var.vpc_id
+
+  ingress {
+    description      = "GRPC"
+    from_port        = 50051
+    to_port          = 50051
+    protocol         = "tcp"
+    cidr_blocks      = var.ip_ingress_ips
+  }
+
+  tags = {
+    Name = "allow_grpc"
+  }
+}
+
 resource "aws_instance" "server" {
   count         = var.instance_count
   ami           = data.aws_ami.ubuntu.id
@@ -49,7 +67,8 @@ resource "aws_instance" "server" {
   subnet_id                   = var.subnet_id
   associate_public_ip_address = true
   vpc_security_group_ids      = [
-    aws_security_group.ssh.id
+    aws_security_group.ssh.id,
+    aws_security_group.grpc.id
   ]
   
   # Auth

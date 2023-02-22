@@ -1,0 +1,22 @@
+- hosts: all
+  gather_facts: no
+  tasks:
+    - name: Include docker role
+      ansible.builtin.include_role:
+        name: geerlingguy.docker
+        apply:
+          become: true
+      tags:
+        - base
+    - name: Load credentials from 'credentials.yaml'
+      ansible.builtin.include_vars: "{{ inventory_dir }}/credentials.yaml"
+      tags:
+        - always
+    - name: Include deploy tasks
+      ansible.builtin.include_tasks:
+        file: "{{ inventory_dir }}/tasks/deploy.yaml"
+        apply:
+          tags:
+            - deploy
+      tags:
+        - deploy
