@@ -1,0 +1,35 @@
+#!/usr/bin/env bash
+
+function get_server_ip() {
+  if [ "${SOURCE}" == "local" ]; then
+    echo "localhost:5005${SERVER_INDEX}"
+  elif [ "${SOURCE}" == "aws" ]; then
+    local tf_output
+    local index
+    local server_ip
+    tf_output=$(cd infra/terraform && terraform output -json)
+    index="$((SERVER_INDEX - 1))"
+    server_ip=$(echo "$tf_output" | jq -r --argjson index "$index" '.public_ips.value[$index]')
+    echo "${server_ip}:50051"
+  fi
+}
+
+SERVER_INDEX=${1?-You must specify the server index}
+TIMES=${2:-10}
+SOURCE=${3:-local}
+
+if [ "$SOURCE" != "aws" ] && [ "$SOURCE" != "local" ]; then
+  echo "Invalid option"
+  echo "Choose one of"
+  echo -e "\t * 'local': local deployment with docker-compose. Default option"
+  echo -e "\t * 'aws': deployment with terraform+ansible"
+  exit 1
+fi
+
+SERVER_IP=$(get_server_ip)
+
+for (( i=0; i < TIMES; i++ )); do
+  command=${RANDOM}
+  echo "Send command '$command'"
+  grpcurl -plaintext -proto private/grpc/server.proto -d "{\"command\": \"${command}\"}" "${SERVER_IP}" raft.server.GRPC.RunCommand
+done

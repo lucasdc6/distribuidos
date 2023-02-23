@@ -57,6 +57,7 @@ message AppendEntriesReply {
 message GetStatusParams {}
 
 message GetStatusReply {
-  int64 current_term      = 1;
-  string membership_state = 2;
+  int64          current_term      = 1;
+  string         membership_state  = 2;
+  repeated Entry logs              = 3;
 }

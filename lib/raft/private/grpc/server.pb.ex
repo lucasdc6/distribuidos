@@ -77,6 +77,7 @@ defmodule Raft.Server.GetStatusReply do
 
   field :current_term, 1, type: :int64, json_name: "currentTerm"
   field :membership_state, 2, type: :string, json_name: "membershipState"
+  field :logs, 3, repeated: true, type: Raft.Server.Entry
 end
 
 defmodule Raft.Server.GRPC.Service do

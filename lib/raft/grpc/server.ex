@@ -214,7 +214,8 @@ defmodule Raft.GRPC.Server do
 
     Raft.Server.GetStatusReply.new(
       current_term: state.current_term,
-      membership_state: Atom.to_string(state.membership_state)
+      membership_state: Atom.to_string(state.membership_state),
+      logs: state.logs
     )
   end
 end
